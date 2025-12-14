@@ -36,169 +36,185 @@ class _MainPanelState extends State<MainPanel> {
     const panel = Color(0xFF2F3B42);
     const innerPanel = Color(0xFF222A2F);
 
-    return Scaffold(
-      backgroundColor: bg,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(14.0),
-          child: Column(
-            children: [
-              // Nagłówek z profilem i przyciskami widoku
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: panel,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  children: [
-                    // Profil użytkownika (lewa część)
-                    Expanded(
-                      flex: 3,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 12,
-                          horizontal: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: innerPanel,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            const CircleAvatar(
-                              radius: 26,
-                              backgroundImage: AssetImage(
-                                'assets/avatar_placeholder.png',
+    // Lokalny Theme tylko dla drzewa tego ekranu:
+    final localTheme = Theme.of(context).copyWith(
+      textTheme: Theme.of(
+        context,
+      ).textTheme.apply(bodyColor: Colors.white, displayColor: Colors.white),
+      primaryTextTheme: Theme.of(context).primaryTextTheme.apply(
+        bodyColor: Colors.white,
+        displayColor: Colors.white,
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: panel,
+        foregroundColor: Colors.white,
+        iconTheme: IconThemeData(color: Colors.white),
+        titleTextStyle: TextStyle(color: Colors.white, fontSize: 20),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          foregroundColor: Colors.white, // tekst przycisków na biało
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
+      ),
+      inputDecorationTheme: const InputDecorationTheme(
+        hintStyle: TextStyle(color: Colors.white70),
+        labelStyle: TextStyle(color: Colors.white70),
+      ),
+    );
+
+    return Theme(
+      data: localTheme,
+      child: Scaffold(
+        backgroundColor: bg,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(14.0),
+            child: Column(
+              children: [
+                // Nagłówek z profilem i przyciskami widoku
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: panel,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      // Profil użytkownika (lewa część)
+                      Expanded(
+                        flex: 3,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: innerPanel,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              const CircleAvatar(
+                                radius: 26,
+                                backgroundImage: AssetImage(
+                                  'assets/avatar_placeholder.png',
+                                ),
+                                backgroundColor: Colors.grey,
                               ),
-                              backgroundColor: Colors.grey,
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: const [
+                                    Text(
+                                      'Imię',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    SizedBox(height: 4),
+                                    Text('Nazwisko'),
+                                    SizedBox(height: 4),
+                                    Text(
+                                      'Zawód',
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(width: 12),
+
+                      // Przyciski: Aktualne / Dostępne
+                      Expanded(
+                        flex: 1,
+                        child: Column(
+                          children: [
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  setState(() {
+                                    showAvailable = false;
+                                  });
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: showAvailable
+                                      ? const Color(0xFF2B3740)
+                                      : const Color(0xFF3A4B53),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                    horizontal: 8,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                child: const Text('Aktualne zlecenia'),
+                              ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: const [
-                                  Text(
-                                    'Imię',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  setState(() {
+                                    showAvailable = true;
+                                  });
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: showAvailable
+                                      ? const Color(0xFF3A4B53)
+                                      : const Color(0xFF2B3740),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                    horizontal: 8,
                                   ),
-                                  SizedBox(height: 4),
-                                  Text('Nazwisko'),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    'Zawód',
-                                    style: TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 12,
-                                    ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
-                                ],
+                                ),
+                                child: const Text('Dostępne zlecenia'),
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ),
-
-                    const SizedBox(width: 12),
-
-                    // Przyciski: Aktualne / Dostępne
-                    Expanded(
-                      flex: 1,
-                      child: Column(
-                        children: [
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: () {
-                                setState(() {
-                                  showAvailable = false;
-                                });
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: showAvailable
-                                    ? const Color(0xFF2B3740)
-                                    : const Color(0xFF3A4B53),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
-                                  horizontal: 8,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                              child: const Text('Aktualne zlecenia'),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: () {
-                                setState(() {
-                                  showAvailable = true;
-                                });
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: showAvailable
-                                    ? const Color(0xFF3A4B53)
-                                    : const Color(0xFF2B3740),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
-                                  horizontal: 8,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                              child: const Text('Dostępne zlecenia'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 14),
-
-              // Nagłówek sekcji dla Dostępnych zleceń
-              if (showAvailable)
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 6.0),
-                    child: Text(
-                      'Dostępne Zlecenia',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.85),
-                        fontSize: 16,
-                      ),
-                    ),
+                    ],
                   ),
                 ),
 
-              // Główna sekcja z listą zleceń
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  decoration: BoxDecoration(
-                    color: panel,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: showAvailable
-                        ? _buildAvailableList()
-                        : _buildCurrentList(),
+                const SizedBox(height: 14),
+
+                // Główna sekcja z listą zleceń
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: panel,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: showAvailable
+                          ? _buildAvailableList()
+                          : _buildCurrentList(),
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -209,12 +225,6 @@ class _MainPanelState extends State<MainPanel> {
   Widget _buildCurrentList() {
     return ListView(
       children: [
-        Center(
-          child: Text(
-            'Tutaj będą Twoje aktualne zlecenia',
-            style: TextStyle(color: Colors.white.withOpacity(0.8)),
-          ),
-        ),
         const SizedBox(height: 12),
         for (var t in sampleTasks)
           TaskCard(
@@ -292,204 +302,231 @@ class DescriptionScreen extends StatelessWidget {
     const innerPanel = Color(0xFF222A2F);
     const darkBox = Color(0xFF16191C);
 
-    return Scaffold(
-      backgroundColor: bg,
-      appBar: AppBar(
-        title: const Text('Opis zlecenia'),
+    // Lokalny Theme dla tego ekranu opisu
+    final localTheme = Theme.of(context).copyWith(
+      textTheme: Theme.of(
+        context,
+      ).textTheme.apply(bodyColor: Colors.white, displayColor: Colors.white),
+      appBarTheme: const AppBarTheme(
         backgroundColor: panel,
-        elevation: 0,
+        foregroundColor: Colors.white,
+        iconTheme: IconThemeData(color: Colors.white),
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(14.0),
-          child: Column(
-            children: [
-              // Górna karta z profilem i przyciskami (tak jak w widoku głównym)
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: panel,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 12,
-                          horizontal: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: innerPanel,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            const CircleAvatar(
-                              radius: 22,
-                              backgroundImage: AssetImage(
-                                'assets/avatar_placeholder.png',
+      inputDecorationTheme: const InputDecorationTheme(
+        hintStyle: TextStyle(color: Colors.white70),
+        labelStyle: TextStyle(color: Colors.white70),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(foregroundColor: Colors.white),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
+      ),
+    );
+
+    return Theme(
+      data: localTheme,
+      child: Scaffold(
+        backgroundColor: bg,
+        appBar: AppBar(
+          title: const Text('Opis zlecenia'),
+          backgroundColor: panel,
+          elevation: 0,
+        ),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(14.0),
+            child: Column(
+              children: [
+                // Górna karta z profilem i przyciskami (tak jak w widoku głównym)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: panel,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: innerPanel,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              const CircleAvatar(
+                                radius: 22,
+                                backgroundImage: AssetImage(
+                                  'assets/avatar_placeholder.png',
+                                ),
+                                backgroundColor: Colors.grey,
                               ),
-                              backgroundColor: Colors.grey,
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: const [
+                                    Text(
+                                      'Imię',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    SizedBox(height: 4),
+                                    Text('Nazwisko'),
+                                    SizedBox(height: 4),
+                                    Text(
+                                      'Zawód',
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // przyciski informacyjne - tylko wizualnie
+                      Expanded(
+                        flex: 1,
+                        child: Column(
+                          children: [
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: null,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF3A4B53),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                child: const Text('Aktualne zlecenia'),
+                              ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: const [
-                                  Text(
-                                    'Imię',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: null,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF2B3740),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
                                   ),
-                                  SizedBox(height: 4),
-                                  Text('Nazwisko'),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    'Zawód',
-                                    style: TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 12,
-                                    ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
-                                ],
+                                ),
+                                child: const Text('Dostępne zlecenia'),
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    // przyciski informacyjne - tylko wizualnie
-                    Expanded(
-                      flex: 1,
-                      child: Column(
-                        children: [
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: null,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF3A4B53),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                              child: const Text('Aktualne zlecenia'),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: null,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF2B3740),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                              child: const Text('Dostępne zlecenia'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 14),
-
-              // Główna karta opisu
-              Expanded(
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: panel,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Column(
-                    children: [
-                      Text(
-                        title.isNotEmpty ? title : 'Zlecenie',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Pole "Opis"
-                      Container(
-                        width: double.infinity,
-                        height: 130,
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: darkBox,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text(
-                          'Opis',
-                          style: TextStyle(color: Colors.white70),
-                        ),
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      // Pole "Potrzebne narzędzia"
-                      Container(
-                        width: double.infinity,
-                        height: 110,
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: darkBox,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text(
-                          'Potrzebne narzędzia',
-                          style: TextStyle(color: Colors.white70),
-                        ),
-                      ),
-
-                      const SizedBox(height: 18),
-
-                      // Przycisk Zapisz się (pokazujemy tylko gdy trzeba)
-                      if (showSaveButton)
-                        SizedBox(
-                          width: 160,
-                          child: ElevatedButton(
-                            onPressed: () {
-                              // tutaj dodasz logikę zapisu do zlecenia
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Zapisano się')),
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF3A4B53),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            child: const Text('Zapisz się'),
-                          ),
-                        ),
                     ],
                   ),
                 ),
-              ),
-            ],
+
+                const SizedBox(height: 14),
+
+                // Główna karta opisu
+                Expanded(
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: panel,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          title.isNotEmpty ? title : 'Zlecenie',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Pole "Opis"
+                        Container(
+                          width: double.infinity,
+                          height: 130,
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: darkBox,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            'Opis',
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // Pole "Potrzebne narzędzia"
+                        Container(
+                          width: double.infinity,
+                          height: 110,
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: darkBox,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            'Potrzebne narzędzia',
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                        ),
+
+                        const SizedBox(height: 18),
+
+                        // Przycisk Zapisz się (pokazujemy tylko gdy trzeba)
+                        if (showSaveButton)
+                          SizedBox(
+                            width: 160,
+                            child: ElevatedButton(
+                              onPressed: () {
+                                // tutaj dodasz logikę zapisu do zlecenia
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Zapisano się')),
+                                );
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF3A4B53),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                              ),
+                              child: const Text('Zapisz się'),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -531,196 +568,216 @@ class _ReportScreenState extends State<ReportScreen> {
     const innerPanel = Color(0xFF222A2F);
     const reportBox = Color(0xFFD9D9D9); // jasny box imitujący pole raportu
 
-    return Scaffold(
-      backgroundColor: bg,
-      appBar: AppBar(
-        title: Text('Raport - ${widget.title}'),
+    final localTheme = Theme.of(context).copyWith(
+      textTheme: Theme.of(
+        context,
+      ).textTheme.apply(bodyColor: Colors.white, displayColor: Colors.white),
+      appBarTheme: const AppBarTheme(
         backgroundColor: panel,
-        elevation: 0,
+        foregroundColor: Colors.white,
+        iconTheme: IconThemeData(color: Colors.white),
       ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(14.0),
-          child: Column(
-            children: [
-              // Górna karta z profilem i przyciskami (wizualnie)
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: panel,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 12,
-                          horizontal: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          color: innerPanel,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            const CircleAvatar(
-                              radius: 22,
-                              backgroundImage: AssetImage(
-                                'assets/avatar_placeholder.png',
+      inputDecorationTheme: const InputDecorationTheme(
+        hintStyle: TextStyle(color: Colors.black54),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(foregroundColor: Colors.white),
+      ),
+    );
+
+    return Theme(
+      data: localTheme,
+      child: Scaffold(
+        backgroundColor: bg,
+        appBar: AppBar(
+          title: Text('Raport - ${widget.title}'),
+          backgroundColor: panel,
+          elevation: 0,
+        ),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(14.0),
+            child: Column(
+              children: [
+                // Górna karta z profilem i przyciskami (wizualnie)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: panel,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: innerPanel,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              const CircleAvatar(
+                                radius: 22,
+                                backgroundImage: AssetImage(
+                                  'assets/avatar_placeholder.png',
+                                ),
+                                backgroundColor: Colors.grey,
                               ),
-                              backgroundColor: Colors.grey,
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: const [
+                                    Text(
+                                      'Imię',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    SizedBox(height: 4),
+                                    Text('Nazwisko'),
+                                    SizedBox(height: 4),
+                                    Text(
+                                      'Zawód',
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // przyciski informacyjne - tylko wizualnie
+                      Expanded(
+                        flex: 1,
+                        child: Column(
+                          children: [
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: null,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF3A4B53),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                child: const Text('Aktualne zlecenia'),
+                              ),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: const [
-                                  Text(
-                                    'Imię',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                            const SizedBox(height: 8),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: null,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF2B3740),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
                                   ),
-                                  SizedBox(height: 4),
-                                  Text('Nazwisko'),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    'Zawód',
-                                    style: TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 12,
-                                    ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
-                                ],
+                                ),
+                                child: const Text('Dostępne zlecenia'),
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    // przyciski informacyjne - tylko wizualnie
-                    Expanded(
-                      flex: 1,
-                      child: Column(
-                        children: [
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: null,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF3A4B53),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                              child: const Text('Aktualne zlecenia'),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: null,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF2B3740),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                              child: const Text('Dostępne zlecenia'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 14),
-
-              // Główna karta raportu
-              Expanded(
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: panel,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Column(
-                    children: [
-                      Text(
-                        widget.title.isNotEmpty ? widget.title : 'Zlecenie',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Pole raportu (w tym przykładzie TextField wieloliniowy)
-                      Expanded(
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: reportBox,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: TextField(
-                            controller: _controller,
-                            maxLines: null,
-                            expands: true,
-                            decoration: const InputDecoration.collapsed(
-                              hintText: 'Wpisz treść raportu...',
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      // Przycisk Wyślij raport
-                      SizedBox(
-                        width: 160,
-                        child: ElevatedButton(
-                          onPressed: _canSend
-                              ? () {
-                                  // tu w przyszłości wyślesz raport do backendu
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Wysłano raport'),
-                                    ),
-                                  );
-                                  Navigator.pop(context);
-                                }
-                              : null,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF3A4B53),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          child: const Text('Wyślij raport'),
-                        ),
-                      ),
                     ],
                   ),
                 ),
-              ),
-            ],
+
+                const SizedBox(height: 14),
+
+                // Główna karta raportu
+                Expanded(
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: panel,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          widget.title.isNotEmpty ? widget.title : 'Zlecenie',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Pole raportu (w tym przykładzie TextField wieloliniowy)
+                        Expanded(
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: reportBox,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: TextField(
+                              controller: _controller,
+                              maxLines: null,
+                              expands: true,
+                              decoration: const InputDecoration.collapsed(
+                                hintText: 'Wpisz treść raportu...',
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 12),
+
+                        // Przycisk Wyślij raport
+                        SizedBox(
+                          width: 160,
+                          child: ElevatedButton(
+                            onPressed: _canSend
+                                ? () {
+                                    // tu w przyszłości wyślesz raport do backendu
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Wysłano raport'),
+                                      ),
+                                    );
+                                    Navigator.pop(context);
+                                  }
+                                : null,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF3A4B53),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            child: const Text('Wyślij raport'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -773,6 +830,7 @@ class TaskCard extends StatelessWidget {
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
+                    color: Colors.white, // upewniamy się, że tytuł jest biały
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -786,7 +844,12 @@ class TaskCard extends StatelessWidget {
                         style: TextStyle(color: Colors.white70),
                       ),
                     ),
-                    Expanded(child: Text(termin)),
+                    Expanded(
+                      child: Text(
+                        termin,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 6),
@@ -800,7 +863,12 @@ class TaskCard extends StatelessWidget {
                         style: TextStyle(color: Colors.white70),
                       ),
                     ),
-                    Expanded(child: Text(adres)),
+                    Expanded(
+                      child: Text(
+                        adres,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
                   ],
                 ),
               ],
