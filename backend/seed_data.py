@@ -31,22 +31,118 @@ USERS: List[Dict] = [
     {"email": "worker_hydraulik@example.com", "password": "worker", "displayName": "Kasia Hydraulik", "role": "worker", "trade": "hydraulik"},
 ]
 
-# --- przykładowe zlecenia (12) ---
+# --- przykładowe zlecenia (13) ---
+# Usunięto pole 'price' (niepotrzebne) i dodano pole 'tools' oraz rozbudowano opisy.
 ORDERS: List[Dict] = [
-    {"title": "Naprawa muru przy wejściu", "description": "Spękania i ubytki", "trade": "murarz", "status": "open", "price": 500, "location": "Ulica Lipowa 5", "tags": ["remont"]},
-    {"title": "Położenie płytek w łazience", "description": "Ok. 10m2", "trade": "murarz", "status": "open", "price": 800, "location": "Os. Zielone 12", "tags": ["glazura"]},
-    {"title": "Instalacja gniazdka", "description": "Dodatkowe gniazdko w kuchni", "trade": "elektryk", "status": "open", "price": 120, "location": "Ulica Polna 9", "tags": ["bezpieczeństwo"]},
-    {"title": "Naprawa instalacji wodnej", "description": "Cieknąca rura pod zlewem", "trade": "hydraulik", "status": "open", "price": 150, "location": "Ulica Słoneczna 3", "tags": ["pilne"]},
-    {"title": "Wymiana stopnia schodów", "description": "Uszkodzony stopień", "trade": "murarz", "status": "assigned", "price": 200, "location": "Ulica Leśna 7", "tags": []},
-    {"title": "Przegląd instalacji elektrycznej", "description": "Szybki przegląd przed wynajmem", "trade": "elektryk", "status": "assigned", "price": 250, "location": "Rynek 1", "tags": ["przegląd"]},
-    {"title": "Uszczelnienie rury grzewczej", "description": "Nieszczelność przy reduktorze", "trade": "hydraulik", "status": "open", "price": 300, "location": "Ulica Miodowa 4", "tags": []},
-    {"title": "Malowanie fragmentu ściany", "description": "Farbą zblendować nowy element", "trade": "murarz", "status": "closed", "price": 100, "location": "Os. Nowe 2", "tags": ["malowanie"]},
-    {"title": "Podłączenie płyty indukcyjnej", "description": "Nowa płyta 3-fazowa", "trade": "elektryk", "status": "open", "price": 400, "location": "Ulica Fabryczna 10", "tags": ["AGD"]},
-    {"title": "Wymiana baterii łazienkowej", "description": "Nowy model", "trade": "hydraulik", "status": "assigned", "price": 120, "location": "Ulica Długa 6", "tags": []},
-    {"title": "Drobne prace murarskie - ławka", "description": "Naprawa zniszczonej ławki", "trade": "murarz", "status": "open", "price": 180, "location": "Park Centralny", "tags": []},
-    {"title": "Podłączyć oświetlenie zewnętrzne", "description": "Oświetlenie na tarasie", "trade": "elektryk", "status": "assigned", "price": 220, "location": "Ulica Ogrodowa 2", "tags": []},
+    {
+        "title": "Naprawa muru przy wejściu",
+        "description": "Przy wejściu widać spękania i ubytki tynku, które pogłębiają się przy opadach. Potrzebne będzie oczyszczenie i uzupełnienie ubytków oraz wyrównanie powierzchni przed malowaniem. Praca powinna zapewnić długotrwałe zabezpieczenie przed dalszymi zniszczeniami.",
+        "trade": "murarz",
+        "status": "open",
+        "location": "Ulica Lipowa 5",
+        "tags": ["remont"],
+        "tools": [" kielnia", "młotek", "mieszadło", "waga tynkowa"]
+    },
+    {
+        "title": "Położenie płytek w łazience",
+        "description": "Łazienka o powierzchni około 10m2 wymaga skucia starej okładziny oraz wyrównania podłoża. Następnie trzeba położyć nowe płytki i wykonać fugowanie z uszczelnieniem narożników. Zlecenie obejmuje również podstawowe prace wykończeniowe przy listwach i progach.",
+        "trade": "murarz",
+        "status": "open",
+        "location": "Os. Zielone 12",
+        "tags": ["glazura"],
+        "tools": ["krzyżyki dystansowe", "szpachla", "miarka", "przecinarka do płytek"]
+    },
+    {
+        "title": "Instalacja gniazdka",
+        "description": "Należy doprowadzić nowy obwód do stanowiska w kuchni i zamontować dodatkowe gniazdko. Prace obejmują prowadzenie przewodów, montaż puszek i podłączenie zgodnie z normami. Po wykonaniu konieczny jest test bezpieczeństwa i poprawne oznakowanie obwodu.",
+        "trade": "elektryk",
+        "status": "open",
+        "location": "Ulica Polna 9",
+        "tags": ["bezpieczeństwo"],
+        "tools": ["śrubokręt izolowany", "wkrętarka", "tester napięcia", "zaciskarka"]
+    },
+    {
+        "title": "Naprawa instalacji wodnej",
+        "description": "Cieknąca rura pod zlewem wymaga zlokalizowania przecieku i naprawy połączeń. Możliwe że konieczna będzie wymiana odcinka rury lub uszczelnień przy złączkach. Po naprawie przeprowadzony będzie test szczelności i krótki przegląd pozostałych przyłączy.",
+        "trade": "hydraulik",
+        "status": "open",
+        "location": "Ulica Słoneczna 3",
+        "tags": ["pilne"],
+        "tools": ["klucz nastawny", "taśma teflonowa", "uszczelki", "nożyce do rur"]
+    },
+    {
+        "title": "Wymiana stopnia schodów",
+        "description": "Uszkodzony stopień schodów wymaga demontażu i wykonania nowego elementu. Trzeba dobrać odpowiedni materiał, zamocować go i wykończyć tak, aby dopasować do pozostałych stopni. Prace muszą zapewnić bezpieczne i stabilne użytkowanie schodów.",
+        "trade": "murarz",
+        "status": "assigned",
+        "location": "Ulica Leśna 7",
+        "tags": [],
+        "tools": ["piła", "wkrętarka", "klin", "młotek"]
+    },
+    {
+        "title": "Przegląd instalacji elektrycznej",
+        "description": "Szybki przegląd instalacji przed wynajmem mieszkania obejmuje sprawdzenie gniazdek, przełączników i rozdzielnicy. Trzeba zweryfikować stan przewodów oraz działanie zabezpieczeń różnicowoprądowych. W razie wykrycia problemów wykonawca ma przygotować raport i propozycję naprawy.",
+        "trade": "elektryk",
+        "status": "assigned",
+        "location": "Rynek 1",
+        "tags": ["przegląd"],
+        "tools": ["miernik elektryczny", "śrubokręt izolowany", "latarka", "zestaw bezpieczników"]
+    },
+    {
+        "title": "Uszczelnienie rury grzewczej",
+        "description": "W rejonie reduktora pojawiła się nieszczelność wymagająca szybkiej interwencji. Należy oczyścić miejsce, wymienić uszczelki lub odcinek rury oraz sprawdzić ciśnienie instalacji. Po naprawie potrzebny jest test działania i ewentualne odpowietrzenie układu.",
+        "trade": "hydraulik",
+        "status": "open",
+        "location": "Ulica Miodowa 4",
+        "tags": [],
+        "tools": ["klucz rurkowy", "uszczelki", "taśma uszczelniająca", "manometr"]
+    },
+    {
+        "title": "Malowanie fragmentu ściany",
+        "description": "Trzeba zblendować nowy element malowany z resztą ściany, aby nie było widocznych przejść kolorystycznych. Prace obejmują przygotowanie powierzchni, gruntowanie i dwie warstwy farby. Zlecenie wymaga precyzji oraz ewentualnego dopasowania odcienia farby.",
+        "trade": "murarz",
+        "status": "closed",
+        "location": "Os. Nowe 2",
+        "tags": ["malowanie"],
+        "tools": ["pędzle", "wałki", "folia ochronna", "szpachelka"]
+    },
+    {
+        "title": "Podłączenie płyty indukcyjnej",
+        "description": "Nowa płyta 3-fazowa wymaga profesjonalnego podłączenia do instalacji oraz sprawdzenia zabezpieczeń. Praca obejmuje wykonanie przyłącza, poprawne oznakowanie i testy obciążeniowe. Po montażu wykonawca zostawi krótką instrukcję bezpieczeństwa dla użytkownika.",
+        "trade": "elektryk",
+        "status": "open",
+        "location": "Ulica Fabryczna 10",
+        "tags": ["AGD"],
+        "tools": ["kabel 3-fazowy", "zaciskarka", "wkrętarka", "tester obciążeniowy"]
+    },
+    {
+        "title": "Wymiana baterii łazienkowej",
+        "description": "Zlecenie obejmuje demontaż starej baterii i montaż nowego modelu zgodnie z instrukcją producenta. Trzeba sprawdzić uszczelnienia i ewentualnie wymienić elementy montażowe. Po montażu należy przetestować pracę baterii i sprawdzić szczelność połączeń.",
+        "trade": "hydraulik",
+        "status": "assigned",
+        "location": "Ulica Długa 6",
+        "tags": [],
+        "tools": ["klucz nastawny", "uszczelki", "śrubokręt", "taśma teflonowa"]
+    },
+    {
+        "title": "Drobne prace murarskie - ławka",
+        "description": "Naprawa zniszczonej ławki wymaga oczyszczenia pęknięć i uzupełnienia brakujących fragmentów. Następnie trzeba wyrównać i zabezpieczyć powierzchnię przed warunkami atmosferycznymi. Praca powinna być wykonana tak, aby ławka była stabilna i estetyczna.",
+        "trade": "murarz",
+        "status": "open",
+        "location": "Park Centralny",
+        "tags": [],
+        "tools": ["młotek", "szpachelka", "cement", "rusztowanie przestawne"]
+    },
+    {
+        "title": "Podłączyć oświetlenie zewnętrzne",
+        "description": "Zadanie polega na podłączeniu oświetlenia tarasu i zabezpieczeniu instalacji przed warunkami atmosferycznymi. Należy poprowadzić przewody, zamontować oprawy i wykonać odpowiednie uszczelnienia. Po instalacji wykonuje się test działania i montaż zabezpieczeń przeciwwilgociowych.",
+        "trade": "elektryk",
+        "status": "assigned",
+        "location": "Ulica Ogrodowa 2",
+        "tags": [],
+        "tools": ["kabel outdoor", "uszczelki", "wkrętarka", "poziomica"]
+    },
 ]
-
 
 def create_or_get_user(u: Dict) -> Dict:
     """
@@ -129,7 +225,6 @@ def seed():
             "description": od.get("description", ""),
             "trade": od.get("trade", ""),
             "status": od.get("status", "open"),
-            "price": od.get("price"),
             "location": od.get("location"),
             # ustaw ownerUid na admin (brak roli owner w systemie)
             "ownerUid": admin["uid"],
@@ -137,6 +232,7 @@ def seed():
             "created_at": firestore.SERVER_TIMESTAMP,
             "updated_at": firestore.SERVER_TIMESTAMP,
             "tags": od.get("tags", []),
+            "tools": od.get("tools", []),
             "participants": [admin["uid"]],
         }
 
