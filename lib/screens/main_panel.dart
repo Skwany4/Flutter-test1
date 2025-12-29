@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class MainPanel extends StatefulWidget {
   const MainPanel({super.key});
@@ -8,7 +10,7 @@ class MainPanel extends StatefulWidget {
 }
 
 class _MainPanelState extends State<MainPanel> {
-  // Tymczasowe dane - później zastąpisz danymi z bazy
+  // Tymczasowe dane - fallback jeśli brak połączenia / brak zleceń
   final List<Map<String, String>> sampleTasks = const [
     {
       'title': 'Tytuł zlecenia A',
@@ -29,6 +31,57 @@ class _MainPanelState extends State<MainPanel> {
 
   // false = Aktualne zlecenia, true = Dostępne zlecenia
   bool showAvailable = false;
+
+  // Firebase
+  final _firestore = FirebaseFirestore.instance;
+  final _auth = FirebaseAuth.instance;
+
+  // profil użytkownika
+  String? role;
+  String? trade;
+  bool loadingProfile = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      setState(() {
+        role = 'worker';
+        trade = null;
+        loadingProfile = false;
+      });
+      return;
+    }
+    try {
+      final doc = await _firestore.collection('users').doc(user.uid).get();
+      if (doc.exists) {
+        final data = doc.data()!;
+        setState(() {
+          role = (data['role'] as String?) ?? 'worker';
+          trade = (data['trade'] as String?) ?? null;
+          loadingProfile = false;
+        });
+      } else {
+        setState(() {
+          role = 'worker';
+          trade = null;
+          loadingProfile = false;
+        });
+      }
+    } catch (e) {
+      // jeśli błąd - użyj domyślnych wartości
+      setState(() {
+        role = 'worker';
+        trade = null;
+        loadingProfile = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -64,6 +117,14 @@ class _MainPanelState extends State<MainPanel> {
         labelStyle: TextStyle(color: Colors.white70),
       ),
     );
+
+    // Jeśli profil się jeszcze ładuje - pokaz loader
+    if (loadingProfile) {
+      return Theme(
+        data: localTheme,
+        child: const Scaffold(body: Center(child: CircularProgressIndicator())),
+      );
+    }
 
     return Theme(
       data: localTheme,
@@ -109,19 +170,21 @@ class _MainPanelState extends State<MainPanel> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   mainAxisAlignment: MainAxisAlignment.center,
-                                  children: const [
+                                  children: [
                                     Text(
-                                      'Imię',
-                                      style: TextStyle(
+                                      _auth.currentUser?.displayName ?? 'Imię',
+                                      style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
-                                    SizedBox(height: 4),
-                                    Text('Nazwisko'),
-                                    SizedBox(height: 4),
+                                    const SizedBox(height: 4),
                                     Text(
-                                      'Zawód',
-                                      style: TextStyle(
+                                      _auth.currentUser?.email ?? 'Nazwisko',
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Zawód: ${trade ?? 'nie ustawiono'}',
+                                      style: const TextStyle(
                                         color: Colors.white70,
                                         fontSize: 12,
                                       ),
@@ -222,41 +285,159 @@ class _MainPanelState extends State<MainPanel> {
   }
 
   // Widok: Aktualne zlecenia (kafelki mają: Opis + Raport)
+  // Pokazujemy zlecenia, gdzie current user jest właścicielem.
   Widget _buildCurrentList() {
-    return ListView(
-      children: [
-        const SizedBox(height: 12),
-        for (var t in sampleTasks)
-          TaskCard(
-            title: t['title'] ?? '',
-            termin: t['termin'] ?? '',
-            adres: t['adres'] ?? '',
-            onOpis: () =>
-                _openOpisScreen(title: t['title'] ?? '', showSaveButton: false),
-            onRight: () => _openReportScreen(title: t['title'] ?? ''),
-            rightButtonLabel: 'Raport',
-          ),
-      ],
+    final currentUser = _auth.currentUser;
+    if (currentUser == null) {
+      // fallback: pokaż sampleTasks
+      return ListView(
+        children: [
+          const SizedBox(height: 12),
+          for (var t in sampleTasks)
+            TaskCard(
+              title: t['title'] ?? '',
+              termin: t['termin'] ?? '',
+              adres: t['adres'] ?? '',
+              onOpis: () => _openOpisScreen(
+                title: t['title'] ?? '',
+                showSaveButton: false,
+              ),
+              onRight: () => _openReportScreen(title: t['title'] ?? ''),
+              rightButtonLabel: 'Raport',
+            ),
+        ],
+      );
+    }
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore
+          .collection('orders')
+          .where('ownerUid', isEqualTo: currentUser.uid)
+          .orderBy('created_at', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return Text('Błąd: ${snapshot.error}');
+        if (snapshot.connectionState == ConnectionState.waiting)
+          return const Center(child: CircularProgressIndicator());
+        final docs = snapshot.data!.docs;
+        if (docs.isEmpty) {
+          // jeśli brak zleceń, pokazujemy sampleTasks jako fallback
+          return ListView(
+            children: [
+              const SizedBox(height: 12),
+              for (var t in sampleTasks)
+                TaskCard(
+                  title: t['title'] ?? '',
+                  termin: t['termin'] ?? '',
+                  adres: t['adres'] ?? '',
+                  onOpis: () => _openOpisScreen(
+                    title: t['title'] ?? '',
+                    showSaveButton: false,
+                  ),
+                  onRight: () => _openReportScreen(title: t['title'] ?? ''),
+                  rightButtonLabel: 'Raport',
+                ),
+            ],
+          );
+        }
+
+        return ListView.builder(
+          itemCount: docs.length,
+          itemBuilder: (context, i) {
+            final raw = docs[i].data() as Map<String, dynamic>;
+            final title = raw['title'] as String? ?? '';
+            // termin/adres mapping - próbujemy pobrać pola termin/location lub created_at
+            String termin = '';
+            if (raw['termin'] != null) {
+              termin = raw['termin'].toString();
+            } else if (raw['created_at'] is Timestamp) {
+              final ts = raw['created_at'] as Timestamp;
+              termin = ts.toDate().toIso8601String().split('T').first;
+            }
+            final adres = raw['location'] as String? ?? '';
+            return TaskCard(
+              title: title,
+              termin: termin,
+              adres: adres,
+              onOpis: () =>
+                  _openOpisScreen(title: title, showSaveButton: false),
+              onRight: () => _openReportScreen(title: title),
+              rightButtonLabel: 'Raport',
+            );
+          },
+        );
+      },
     );
   }
 
   // Widok: Dostępne zlecenia (kafelki mają: Opis + Zapisz się)
+  // Pokazujemy zlecenia o status 'open' i trade == user.trade
   Widget _buildAvailableList() {
-    return ListView.builder(
-      itemCount: sampleTasks.length,
-      itemBuilder: (context, index) {
-        final t = sampleTasks[index];
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: TaskCard(
-            title: t['title'] ?? '',
-            termin: t['termin'] ?? '',
-            adres: t['adres'] ?? '',
-            onOpis: () =>
-                _openOpisScreen(title: t['title'] ?? '', showSaveButton: true),
-            onRight: () => _showSnack('Zapisano chęć do zlecenia'),
-            rightButtonLabel: 'Zapisz się',
-          ),
+    if (trade == null || trade!.isEmpty) {
+      return const Center(
+        child: Text('Nie ustawiono branży. Skontaktuj się z administratorem.'),
+      );
+    }
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore
+          .collection('orders')
+          .where('status', isEqualTo: 'open')
+          .where('trade', isEqualTo: trade)
+          .orderBy('created_at', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) return Text('Błąd: ${snapshot.error}');
+        if (snapshot.connectionState == ConnectionState.waiting)
+          return const Center(child: CircularProgressIndicator());
+        final docs = snapshot.data!.docs;
+        if (docs.isEmpty)
+          return const Center(child: Text('Brak dostępnych zleceń'));
+        return ListView.builder(
+          itemCount: docs.length,
+          itemBuilder: (context, index) {
+            final raw = docs[index].data() as Map<String, dynamic>;
+            final id = docs[index].id;
+            final title = raw['title'] as String? ?? '';
+            String termin = '';
+            if (raw['termin'] != null) {
+              termin = raw['termin'].toString();
+            } else if (raw['created_at'] is Timestamp) {
+              final ts = raw['created_at'] as Timestamp;
+              termin = ts.toDate().toIso8601String().split('T').first;
+            }
+            final adres = raw['location'] as String? ?? '';
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: TaskCard(
+                title: title,
+                termin: termin,
+                adres: adres,
+                onOpis: () =>
+                    _openOpisScreen(title: title, showSaveButton: true),
+                onRight: () async {
+                  final user = _auth.currentUser;
+                  if (user == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Zaloguj się najpierw')),
+                    );
+                    return;
+                  }
+                  // przypisz siebie do zlecenia
+                  await _firestore.collection('orders').doc(id).update({
+                    'assignedTo': user.uid,
+                    'status': 'assigned',
+                    'updated_at': FieldValue.serverTimestamp(),
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Zapisano chęć do zlecenia')),
+                  );
+                },
+                rightButtonLabel: 'Zapisz się',
+              ),
+            );
+          },
         );
       },
     );
@@ -785,6 +966,7 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 }
 
+/// TaskCard (bez zmian, używane w całym pliku)
 class TaskCard extends StatelessWidget {
   final String title;
   final String termin;

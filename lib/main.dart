@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'screens/login_screen.dart';
-import 'screens/main_panel.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   runApp(const MainApp());
 }
 
@@ -11,6 +13,10 @@ class MainApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(title: "Test", debugShowCheckedModeBanner: false, home: LoginScreen());
+    return const MaterialApp(
+      title: "Test",
+      debugShowCheckedModeBanner: false,
+      home: LoginScreen(),
+    );
   }
 }

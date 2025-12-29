@@ -1,7 +1,11 @@
 import 'dart:convert';
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'main_panel.dart';
+import '../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -11,22 +15,28 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // Kontrolery do pobierania tekstu
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  
-  // Stan ładowania
   bool _isLoading = false;
+  final AuthService _authService = AuthService();
 
-  // ADRES IP (Dla Chrome/Windows ustaw 127.0.0.1, dla Emulatora 10.0.2.2)
-  final String _baseUrl = 'http://127.0.0.1:8000';
+  // Uniwersalna funkcja zwracająca poprawny adres backendu zależnie od platformy
+  String backendBase() {
+    // Web: używamy localhost (upewnij się, że serwer jest dostępny z przeglądarki)
+    if (kIsWeb) return 'http://127.0.0.1:8000';
+    // Android emulator (AVD) ma specjalny adres 10.0.2.2
+    if (Platform.isAndroid) return 'http://10.0.2.2:8000';
+    // iOS simulator i desktop mogą używać localhost
+    if (Platform.isIOS) return 'http://127.0.0.1:8000';
+    // Fallback (np. Windows/macOS/Linux) - localhost
+    return 'http://127.0.0.1:8000';
+  }
 
   Future<void> _login() async {
-    // 1. Walidacja wstępna
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Wpisz email i hasło")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Wpisz email i hasło")));
       return;
     }
 
@@ -35,51 +45,40 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      // 2. Wysłanie zapytania do Flaska
-      final response = await http.post(
-        Uri.parse('$_baseUrl/token'),
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: {
-          'username': _emailController.text, // Backend oczekuje 'username'
-          'password': _passwordController.text,
-        },
+      final userCred = await _authService.signIn(
+        _emailController.text.trim(),
+        _passwordController.text.trim(),
+      );
+
+      final idToken = await userCred.user!.getIdToken();
+
+      // Wywołanie backendu z poprawnym adresem zależnym od platformy
+      final response = await http.get(
+        Uri.parse('${backendBase()}/me'),
+        headers: {'Authorization': 'Bearer $idToken'},
       );
 
       if (response.statusCode == 200) {
-        // 3. Sukces - Parsowanie tokena (opcjonalne zapisanie go)
-        final data = jsonDecode(response.body);
-        print("Token: ${data['access_token']}");
-
+        // Sukces -> przejście do panelu
         if (mounted) {
-          // Przejście do Panelu Głównego
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(
-              builder: (context) => const MainPanel(),
-            ),
+            MaterialPageRoute(builder: (context) => const MainPanel()),
           );
         }
       } else {
-        // Błąd logowania (np. złe hasło)
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("Błędny login lub hasło"),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      // Błąd połączenia (np. serwer wyłączony)
-      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Błąd połączenia: $e"),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text("Błąd serwera: ${response.statusCode}")),
         );
       }
+    } on FirebaseAuthException catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Błąd logowania: ${e.message}")));
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Błąd: $e")));
     } finally {
       if (mounted) {
         setState(() {
@@ -89,26 +88,8 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // Funkcja pomocnicza do szybkiej rejestracji (podpięta pod Zapomniałem hasła dla testów)
-  Future<void> _quickRegister() async {
-    try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/register'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'username': _emailController.text,
-          'password': _passwordController.text,
-        }),
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Rejestracja: ${response.body}")),
-        );
-      }
-    } catch (e) {
-      print(e);
-    }
-  }
+  // Usuń możliwość rejestracji w UI — konta będzie tworzył admin (później)
+  // Jeśli masz w services/auth_service.register(), zostaw metodę w serwisie, ale nie udostępniaj jej w UI.
 
   @override
   Widget build(BuildContext context) {
@@ -119,10 +100,10 @@ class _LoginScreenState extends State<LoginScreen> {
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              Color(0xff0d1b2a), // ink-black
-              Color(0xff1b263b), // prussian-blue
-              Color(0xff415a77), // dusk-blue
-              Color(0xff778da9), // dusty-denim
+              Color(0xff0d1b2a),
+              Color(0xff1b263b),
+              Color(0xff415a77),
+              Color(0xff778da9),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -134,9 +115,7 @@ class _LoginScreenState extends State<LoginScreen> {
               padding: const EdgeInsets.all(30),
               margin: const EdgeInsets.symmetric(horizontal: 20),
               decoration: BoxDecoration(
-                color: const Color(
-                  0xffe0e1dd,
-                ).withOpacity(0.9), // alabaster-grey
+                color: const Color(0xffe0e1dd).withOpacity(0.9),
                 borderRadius: BorderRadius.circular(25),
                 boxShadow: const [
                   BoxShadow(
@@ -155,14 +134,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xff0d1b2a), // ink-black
+                      color: Color(0xff0d1b2a),
                     ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 30),
-                  // --- POLE EMAIL ---
                   TextField(
-                    controller: _emailController, // Dodano kontroler
+                    controller: _emailController,
                     decoration: InputDecoration(
                       labelText: "Email",
                       prefixIcon: const Icon(
@@ -173,15 +151,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         borderRadius: BorderRadius.circular(15),
                       ),
                       filled: true,
-                      fillColor: const Color(
-                        0xff778da9,
-                      ).withOpacity(0.1),
+                      fillColor: const Color(0xff778da9).withOpacity(0.1),
                     ),
                   ),
                   const SizedBox(height: 20),
-                  // --- POLE HASŁO ---
                   TextField(
-                    controller: _passwordController, // Dodano kontroler
+                    controller: _passwordController,
                     obscureText: true,
                     decoration: InputDecoration(
                       labelText: "Hasło",
@@ -193,24 +168,20 @@ class _LoginScreenState extends State<LoginScreen> {
                         borderRadius: BorderRadius.circular(15),
                       ),
                       filled: true,
-                      fillColor: const Color(
-                        0xff778da9,
-                      ).withOpacity(0.1),
+                      fillColor: const Color(0xff778da9).withOpacity(0.1),
                     ),
                   ),
                   const SizedBox(height: 30),
-                  // --- PRZYCISK LOGOWANIA ---
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _isLoading ? null : _login, // Podpięta logika
+                      onPressed: _isLoading ? null : _login,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xff415a77), // dusk-blue
+                        backgroundColor: const Color(0xff415a77),
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(15),
                         ),
-                        elevation: 5,
                       ),
                       child: _isLoading
                           ? const SizedBox(
@@ -223,21 +194,24 @@ class _LoginScreenState extends State<LoginScreen> {
                             )
                           : const Text(
                               "Zaloguj się",
-                              style: TextStyle(fontSize: 18, color: Colors.white),
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: Colors.white,
+                              ),
                             ),
                     ),
                   ),
-                  const SizedBox(height: 15),
+                  const SizedBox(height: 10),
+                  // Usuń przycisk rejestracji — użytkownicy nie mogą sami tworzyć kont
                   TextButton(
-                    // Dla wygody testowania podpiąłem tu rejestrację
-                    // Jeśli przytrzymasz przycisk - zarejestruje użytkownika
-                    onPressed: () {}, 
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Konta tworzy admin')),
+                      );
+                    },
                     child: const Text(
-                      "Zapomniałem hasła",
-                      style: TextStyle(
-                        color: Color(0xff1b263b),
-                        fontSize: 12,
-                      ),
+                      'Zapomniałem hasła',
+                      style: TextStyle(color: Color(0xff1b263b)),
                     ),
                   ),
                 ],

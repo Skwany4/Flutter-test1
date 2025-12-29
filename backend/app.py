@@ -1,97 +1,138 @@
 import os
+from functools import wraps
 from flask import Flask, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
-from flask_bcrypt import Bcrypt
 from flask_cors import CORS
-
-app = Flask(__name__)
+import firebase_admin
+from firebase_admin import credentials, auth, firestore
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+SERVICE_ACCOUNT_PATH = os.path.join(BASE_DIR, 'serviceAccountKey.json')  # umieść tu swój plik
 
-INSTANCE_FOLDER_PATH = os.path.join(BASE_DIR, 'instance')
-DB_PATH = os.path.join(INSTANCE_FOLDER_PATH, 'database.db')
+# Inicjalizacja Firebase Admin
+if not firebase_admin._apps:
+    cred = credentials.Certificate(SERVICE_ACCOUNT_PATH)
+    firebase_admin.initialize_app(cred)
 
-if not os.path.exists(INSTANCE_FOLDER_PATH):
-    os.makedirs(INSTANCE_FOLDER_PATH)
-    print(f"Utworzono folder: {INSTANCE_FOLDER_PATH}")
+db = firestore.client()
 
-
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + DB_PATH
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['JWT_SECRET_KEY'] = 'super_bardzo_tajny_klucz'
-
-db = SQLAlchemy(app)
-jwt = JWTManager(app)
-bcrypt = Bcrypt(app)
+app = Flask(__name__)
 CORS(app)
 
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password = db.Column(db.String(200), nullable=False)
+def require_firebase_token(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        header = request.headers.get('Authorization', '')
+        if not header.startswith('Bearer '):
+            return jsonify({"msg": "Brak tokena"}), 401
+        id_token = header.split(' ')[1]
+        try:
+            decoded = auth.verify_id_token(id_token)
+        except Exception as e:
+            return jsonify({"msg": "Nieprawidłowy token", "error": str(e)}), 401
+        request.firebase_user = decoded
+        return fn(*args, **kwargs)
+    return wrapper
 
-with app.app_context():
-    db.create_all()
-
-
-# Rejestracja 
-@app.route('/register', methods=['POST'])
-def register():
-    data = request.get_json()
-    
-    if not data or not data.get('username') or not data.get('password'):
-        return jsonify({"msg": "Brak loginu lub hasła"}), 400
-
-
-    if User.query.filter_by(username=data['username']).first():
-        return jsonify({"msg": "Użytkownik już istnieje"}), 400
-
-    hashed_password = bcrypt.generate_password_hash(data['password']).decode('utf-8')
-    new_user = User(username=data['username'], password=hashed_password)
-    
-    db.session.add(new_user)
-    db.session.commit()
-
-    return jsonify({"msg": "Użytkownik utworzony pomyślnie"}), 200
-
-# Logowanie 
-@app.route('/token', methods=['POST'])
-def login():
-    username = request.form.get('username')
-    password = request.form.get('password')
-
-
-    print(f"--- DEBUG LOGOWANIA ---")
-    print(f"Otrzymany login: '{username}'")
-    print(f"Otrzymane hasło: '{password}'")
-    
-    user = User.query.filter_by(username=username).first()
-    
-    if user:
-        print(f"Użytkownik '{username}' ZNALEZIONY w bazie.")
-        haslo_ok = bcrypt.check_password_hash(user.password, password)
-        print(f"Czy hasło pasuje?: {haslo_ok}")
+@app.route('/me', methods=['GET'])
+@require_firebase_token
+def me():
+    uid = request.firebase_user['uid']
+    doc = db.collection('users').document(uid).get()
+    if doc.exists:
+        return jsonify(doc.to_dict()), 200
     else:
-        print(f"Użytkownik '{username}' NIE ISTNIEJE w bazie.")
-    print("-----------------------")
+        basic = {
+            'uid': uid,
+            'email': request.firebase_user.get('email'),
+            'name': request.firebase_user.get('name'),
+            'role': 'worker'
+        }
+        return jsonify(basic), 200
 
+@app.route('/orders', methods=['GET'])
+def get_orders():
+    trade = request.args.get('trade')
+    status = request.args.get('status')
+    q = db.collection('orders')
+    if trade:
+        q = q.where('trade', '==', trade)
+    if status:
+        q = q.where('status', '==', status)
+    q = q.order_by('created_at', direction=firestore.Query.DESCENDING)
+    docs = q.stream()
+    orders = []
+    for d in docs:
+        data = d.to_dict()
+        data['id'] = d.id
+        orders.append(data)
+    return jsonify(orders), 200
 
-    if not username or not password:
-        return jsonify({"msg": "Brak danych logowania"}), 400
+@app.route('/orders/<order_id>', methods=['GET'])
+def get_order(order_id):
+    doc = db.collection('orders').document(order_id).get()
+    if not doc.exists:
+        return jsonify({"msg": "Zlecenie nie istnieje"}), 404
+    data = doc.to_dict()
+    data['id'] = doc.id
+    return jsonify(data), 200
 
-    if user and bcrypt.check_password_hash(user.password, password):
-        access_token = create_access_token(identity=username)
-        return jsonify(access_token=access_token), 200
-    
-    return jsonify({"msg": "Błędny login lub hasło"}), 401
+@app.route('/orders', methods=['POST'])
+@require_firebase_token
+def create_order():
+    payload = request.get_json() or {}
+    title = payload.get('title')
+    trade = payload.get('trade')
+    if not title or not trade:
+        return jsonify({"msg": "Brakuje title/trade"}), 400
+    uid = request.firebase_user['uid']
+    order = {
+        'title': title,
+        'description': payload.get('description'),
+        'trade': trade,
+        'status': payload.get('status', 'open'),
+        'price': payload.get('price'),
+        'location': payload.get('location'),
+        'ownerUid': uid,
+        'assignedTo': None,
+        'created_at': firestore.SERVER_TIMESTAMP,
+        'updated_at': firestore.SERVER_TIMESTAMP
+    }
+    doc_ref = db.collection('orders').add(order)
+    return jsonify({"id": doc_ref[1].id}), 201
 
-@app.route('/protected', methods=['GET'])
-@jwt_required()
-def protected():
-    current_user = get_jwt_identity()
-    return jsonify(logged_in_as=current_user), 200
+@app.route('/orders/<order_id>/assign', methods=['POST'])
+@require_firebase_token
+def assign_order(order_id):
+    uid = request.firebase_user['uid']
+    user_doc = db.collection('users').document(uid).get()
+    user = user_doc.to_dict() if user_doc.exists else {}
+    role = user.get('role', 'worker')
+    order_ref = db.collection('orders').document(order_id)
+    order_doc = order_ref.get()
+    if not order_doc.exists:
+        return jsonify({"msg": "Zlecenie nie istnieje"}), 404
+    order = order_doc.to_dict()
+    if role == 'worker':
+        if user.get('trade') != order.get('trade'):
+            return jsonify({"msg": "Branża nie pasuje"}), 403
+        order_ref.update({
+            'assignedTo': uid,
+            'status': 'assigned',
+            'updated_at': firestore.SERVER_TIMESTAMP
+        })
+        return jsonify({"msg": "Przypisano użytkownika"}), 200
+    elif role == 'admin':
+        data = request.get_json() or {}
+        worker_uid = data.get('worker_uid')
+        if not worker_uid:
+            return jsonify({"msg": "Brakuje worker_uid"}), 400
+        order_ref.update({
+            'assignedTo': worker_uid,
+            'status': 'assigned',
+            'updated_at': firestore.SERVER_TIMESTAMP
+        })
+        return jsonify({"msg": "Przypisano wskazanego worker"}), 200
+    return jsonify({"msg": "Brak uprawnień"}), 403
 
 if __name__ == '__main__':
-
     app.run(debug=True, host='0.0.0.0', port=8000)
