@@ -48,6 +48,10 @@ class _MainPanelState extends State<MainPanel> {
     _loadProfile();
   }
 
+  Future<void> _load_profile_updateRoleFallback() async {
+    // kept for potential future adjustments
+  }
+
   Future<void> _loadProfile() async {
     final user = _auth.currentUser;
     if (user == null) {
@@ -64,7 +68,8 @@ class _MainPanelState extends State<MainPanel> {
       if (doc.exists) {
         final data = doc.data()!;
         setState(() {
-          role = (data['role'] as String?) ?? 'worker';
+          // only two roles in DB: 'admin' and 'worker' (fallback to 'worker')
+          role = (data['role'] as String?) == 'admin' ? 'admin' : 'worker';
           trade = (data['trade'] as String?) ?? null;
           displayNameFromProfile =
               (data['displayName'] as String?) ?? user.displayName ?? 'Imię';
@@ -292,7 +297,9 @@ class _MainPanelState extends State<MainPanel> {
   }
 
   // Widok: Aktualne zlecenia (kafelki mają: Opis + Raport)
-  // Pokazujemy zlecenia gdzie current user jest właścicielem lub przypisanym, admin widzi wszystko.
+  // Zmodyfikowane: tylko dwie role w systemie: 'admin' i 'worker'.
+  // - admin: widzi wszystkie zlecenia
+  // - worker: widzi tylko zlecenia, do których jest przypisany (assignedTo == jego uid)
   Widget _buildCurrentList() {
     final currentUser = _auth.currentUser;
     if (currentUser == null) {
@@ -375,71 +382,27 @@ class _MainPanelState extends State<MainPanel> {
       );
     }
 
-    // Dla worker/owner: pobieramy (jednorazowo) owned i assigned i łączymy
-    return FutureBuilder<List<QuerySnapshot>>(
-      future: Future.wait([
-        _firestore
-            .collection('orders')
-            .where('ownerUid', isEqualTo: currentUser.uid)
-            .get(),
-        _firestore
-            .collection('orders')
-            .where('assignedTo', isEqualTo: currentUser.uid)
-            .get(),
-      ]),
+    // Worker: pokaż tylko zlecenia przypisane do zalogowanego użytkownika (assignedTo == uid)
+    return StreamBuilder<QuerySnapshot>(
+      stream: _firestore
+          .collection('orders')
+          .where('assignedTo', isEqualTo: currentUser.uid)
+          .orderBy('created_at', descending: true)
+          .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) return Text('Błąd: ${snapshot.error}');
         if (snapshot.connectionState == ConnectionState.waiting)
           return const Center(child: CircularProgressIndicator());
-        final ownedDocs = snapshot.data![0].docs;
-        final assignedDocs = snapshot.data![1].docs;
-
-        // połącz unikalnie po ID
-        final Map<String, QueryDocumentSnapshot> map = {};
-        for (var d in ownedDocs) map[d.id] = d;
-        for (var d in assignedDocs) map[d.id] = d;
-
-        final combined = map.values.toList();
-
-        // opcjonalne sortowanie po created_at malejąco
-        combined.sort((a, b) {
-          final ta = (a.data() as Map<String, dynamic>)['created_at'];
-          final tb = (b.data() as Map<String, dynamic>)['created_at'];
-          try {
-            if (ta == null && tb == null) return 0;
-            if (ta == null) return 1;
-            if (tb == null) return -1;
-            // Timestamp ma compareTo
-            return (tb as dynamic).compareTo(ta as dynamic);
-          } catch (_) {
-            return 0;
-          }
-        });
-
-        if (combined.isEmpty) {
-          return ListView(
-            children: [
-              const SizedBox(height: 12),
-              for (var t in sampleTasks)
-                TaskCard(
-                  title: t['title'] ?? '',
-                  termin: t['termin'] ?? '',
-                  adres: t['adres'] ?? '',
-                  onOpis: () => _openOpisScreen(
-                    title: t['title'] ?? '',
-                    showSaveButton: false,
-                  ),
-                  onRight: () => _openReportScreen(title: t['title'] ?? ''),
-                  rightButtonLabel: 'Raport',
-                ),
-            ],
+        final docs = snapshot.data!.docs;
+        if (docs.isEmpty) {
+          return const Center(
+            child: Text('Brak aktualnych zleceń przypisanych do Ciebie'),
           );
         }
-
         return ListView.builder(
-          itemCount: combined.length,
+          itemCount: docs.length,
           itemBuilder: (context, i) {
-            final raw = combined[i].data() as Map<String, dynamic>;
+            final raw = docs[i].data() as Map<String, dynamic>;
             final title = raw['title'] as String? ?? '';
             String termin = '';
             if (raw['termin'] != null) {
@@ -1000,53 +963,49 @@ class _ReportScreenState extends State<ReportScreen> {
                           ),
                         ),
                         const SizedBox(height: 12),
-
-                        // Pole raportu (w tym przykładzie TextField wieloliniowy)
-                        Expanded(
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: reportBox,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: TextField(
-                              controller: _controller,
-                              maxLines: null,
-                              expands: true,
-                              decoration: const InputDecoration.collapsed(
-                                hintText: 'Wpisz treść raportu...',
-                              ),
+                        Container(
+                          width: double.infinity,
+                          height: 220,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: reportBox,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: TextField(
+                            controller: _controller,
+                            maxLines: null,
+                            decoration: const InputDecoration.collapsed(
+                              hintText: 'Wpisz raport...',
                             ),
                           ),
                         ),
-
                         const SizedBox(height: 12),
-
-                        // Przycisk Wyślij raport
-                        SizedBox(
-                          width: 160,
-                          child: ElevatedButton(
-                            onPressed: _canSend
-                                ? () {
-                                    // tu w przyszłości wyślesz raport do backendu
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Wysłano raport'),
-                                      ),
-                                    );
-                                    Navigator.pop(context);
-                                  }
-                                : null,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF3A4B53),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            TextButton(
+                              onPressed: () {
+                                Navigator.pop(context);
+                              },
+                              child: const Text('Anuluj'),
                             ),
-                            child: const Text('Wyślij raport'),
-                          ),
+                            ElevatedButton(
+                              onPressed: _canSend
+                                  ? () {
+                                      // tutaj możesz zapisać raport do Firestore lub wysłać go gdzieś
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Wysłano raport'),
+                                        ),
+                                      );
+                                      Navigator.pop(context);
+                                    }
+                                  : null,
+                              child: const Text('Wyślij'),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -1061,7 +1020,8 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 }
 
-/// TaskCard (używane w całym pliku)
+// Prosty widget karty zadania używany w widoku listy.
+// Jeśli masz własną implementację TaskCard w innym pliku, usuń poniższą i importuj tamten.
 class TaskCard extends StatelessWidget {
   final String title;
   final String termin;
@@ -1077,23 +1037,18 @@ class TaskCard extends StatelessWidget {
     required this.adres,
     required this.onOpis,
     required this.onRight,
-    this.rightButtonLabel = 'Zapisz się',
+    required this.rightButtonLabel,
   });
 
   @override
   Widget build(BuildContext context) {
-    const cardColor = Color(0xFF262E33);
-    const innerColor = Color(0xFF1F2629);
-
+    const cardColor = Color(0xFF222A2F);
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
+      margin: const EdgeInsets.symmetric(vertical: 6),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: cardColor,
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: const [
-          BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
-        ],
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1102,30 +1057,20 @@ class TaskCard extends StatelessWidget {
             title,
             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(child: Text('Termin: $termin')),
-              Text(adres, style: const TextStyle(color: Colors.white70)),
+              const SizedBox(width: 8),
+              Expanded(child: Text('Adres: $adres')),
             ],
           ),
           const SizedBox(height: 12),
           Row(
-            mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              TextButton(
-                onPressed: onOpis,
-                child: const Text('Opis'),
-                style: TextButton.styleFrom(foregroundColor: Colors.white),
-              ),
+              OutlinedButton(onPressed: onOpis, child: const Text('Opis')),
               const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: onRight,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF3A4B53),
-                ),
-                child: Text(rightButtonLabel),
-              ),
+              ElevatedButton(onPressed: onRight, child: Text(rightButtonLabel)),
             ],
           ),
         ],
