@@ -40,6 +40,7 @@ class _MainPanelState extends State<MainPanel> {
   String? role;
   String? trade;
   bool loadingProfile = true;
+  String displayNameFromProfile = 'Imię';
 
   @override
   void initState() {
@@ -53,6 +54,7 @@ class _MainPanelState extends State<MainPanel> {
       setState(() {
         role = 'worker';
         trade = null;
+        displayNameFromProfile = 'Imię';
         loadingProfile = false;
       });
       return;
@@ -64,12 +66,15 @@ class _MainPanelState extends State<MainPanel> {
         setState(() {
           role = (data['role'] as String?) ?? 'worker';
           trade = (data['trade'] as String?) ?? null;
+          displayNameFromProfile =
+              (data['displayName'] as String?) ?? user.displayName ?? 'Imię';
           loadingProfile = false;
         });
       } else {
         setState(() {
           role = 'worker';
           trade = null;
+          displayNameFromProfile = user.displayName ?? 'Imię';
           loadingProfile = false;
         });
       }
@@ -78,6 +83,7 @@ class _MainPanelState extends State<MainPanel> {
       setState(() {
         role = 'worker';
         trade = null;
+        displayNameFromProfile = _auth.currentUser?.displayName ?? 'Imię';
         loadingProfile = false;
       });
     }
@@ -172,14 +178,15 @@ class _MainPanelState extends State<MainPanel> {
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Text(
-                                      _auth.currentUser?.displayName ?? 'Imię',
+                                      displayNameFromProfile,
                                       style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      _auth.currentUser?.email ?? 'Nazwisko',
+                                      _auth.currentUser?.email ??
+                                          'email@domena',
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
@@ -285,7 +292,7 @@ class _MainPanelState extends State<MainPanel> {
   }
 
   // Widok: Aktualne zlecenia (kafelki mają: Opis + Raport)
-  // Pokazujemy zlecenia, gdzie current user jest właścicielem.
+  // Pokazujemy zlecenia gdzie current user jest właścicielem lub przypisanym, admin widzi wszystko.
   Widget _buildCurrentList() {
     final currentUser = _auth.currentUser;
     if (currentUser == null) {
@@ -309,19 +316,107 @@ class _MainPanelState extends State<MainPanel> {
       );
     }
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: _firestore
-          .collection('orders')
-          .where('ownerUid', isEqualTo: currentUser.uid)
-          .orderBy('created_at', descending: true)
-          .snapshots(),
+    // Admin: pokazujemy wszystkie zlecenia realtime
+    if (role == 'admin') {
+      return StreamBuilder<QuerySnapshot>(
+        stream: _firestore
+            .collection('orders')
+            .orderBy('created_at', descending: true)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.hasError) return Text('Błąd: ${snapshot.error}');
+          if (snapshot.connectionState == ConnectionState.waiting)
+            return const Center(child: CircularProgressIndicator());
+          final docs = snapshot.data!.docs;
+          if (docs.isEmpty) {
+            return ListView(
+              children: [
+                const SizedBox(height: 12),
+                for (var t in sampleTasks)
+                  TaskCard(
+                    title: t['title'] ?? '',
+                    termin: t['termin'] ?? '',
+                    adres: t['adres'] ?? '',
+                    onOpis: () => _openOpisScreen(
+                      title: t['title'] ?? '',
+                      showSaveButton: false,
+                    ),
+                    onRight: () => _openReportScreen(title: t['title'] ?? ''),
+                    rightButtonLabel: 'Raport',
+                  ),
+              ],
+            );
+          }
+          return ListView.builder(
+            itemCount: docs.length,
+            itemBuilder: (context, i) {
+              final raw = docs[i].data() as Map<String, dynamic>;
+              final title = raw['title'] as String? ?? '';
+              String termin = '';
+              if (raw['termin'] != null) {
+                termin = raw['termin'].toString();
+              } else if (raw['created_at'] is Timestamp) {
+                final ts = raw['created_at'] as Timestamp;
+                termin = ts.toDate().toIso8601String().split('T').first;
+              }
+              final adres = raw['location'] as String? ?? '';
+              return TaskCard(
+                title: title,
+                termin: termin,
+                adres: adres,
+                onOpis: () =>
+                    _openOpisScreen(title: title, showSaveButton: false),
+                onRight: () => _openReportScreen(title: title),
+                rightButtonLabel: 'Raport',
+              );
+            },
+          );
+        },
+      );
+    }
+
+    // Dla worker/owner: pobieramy (jednorazowo) owned i assigned i łączymy
+    return FutureBuilder<List<QuerySnapshot>>(
+      future: Future.wait([
+        _firestore
+            .collection('orders')
+            .where('ownerUid', isEqualTo: currentUser.uid)
+            .get(),
+        _firestore
+            .collection('orders')
+            .where('assignedTo', isEqualTo: currentUser.uid)
+            .get(),
+      ]),
       builder: (context, snapshot) {
         if (snapshot.hasError) return Text('Błąd: ${snapshot.error}');
         if (snapshot.connectionState == ConnectionState.waiting)
           return const Center(child: CircularProgressIndicator());
-        final docs = snapshot.data!.docs;
-        if (docs.isEmpty) {
-          // jeśli brak zleceń, pokazujemy sampleTasks jako fallback
+        final ownedDocs = snapshot.data![0].docs;
+        final assignedDocs = snapshot.data![1].docs;
+
+        // połącz unikalnie po ID
+        final Map<String, QueryDocumentSnapshot> map = {};
+        for (var d in ownedDocs) map[d.id] = d;
+        for (var d in assignedDocs) map[d.id] = d;
+
+        final combined = map.values.toList();
+
+        // opcjonalne sortowanie po created_at malejąco
+        combined.sort((a, b) {
+          final ta = (a.data() as Map<String, dynamic>)['created_at'];
+          final tb = (b.data() as Map<String, dynamic>)['created_at'];
+          try {
+            if (ta == null && tb == null) return 0;
+            if (ta == null) return 1;
+            if (tb == null) return -1;
+            // Timestamp ma compareTo
+            return (tb as dynamic).compareTo(ta as dynamic);
+          } catch (_) {
+            return 0;
+          }
+        });
+
+        if (combined.isEmpty) {
           return ListView(
             children: [
               const SizedBox(height: 12),
@@ -342,11 +437,10 @@ class _MainPanelState extends State<MainPanel> {
         }
 
         return ListView.builder(
-          itemCount: docs.length,
+          itemCount: combined.length,
           itemBuilder: (context, i) {
-            final raw = docs[i].data() as Map<String, dynamic>;
+            final raw = combined[i].data() as Map<String, dynamic>;
             final title = raw['title'] as String? ?? '';
-            // termin/adres mapping - próbujemy pobrać pola termin/location lub created_at
             String termin = '';
             if (raw['termin'] != null) {
               termin = raw['termin'].toString();
@@ -429,6 +523,7 @@ class _MainPanelState extends State<MainPanel> {
                     'assignedTo': user.uid,
                     'status': 'assigned',
                     'updated_at': FieldValue.serverTimestamp(),
+                    // opcjonalnie dodaj do participants
                   });
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Zapisano chęć do zlecenia')),
@@ -966,7 +1061,7 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 }
 
-/// TaskCard (bez zmian, używane w całym pliku)
+/// TaskCard (używane w całym pliku)
 class TaskCard extends StatelessWidget {
   final String title;
   final String termin;
@@ -1000,102 +1095,38 @@ class TaskCard extends StatelessWidget {
           BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Lewa: opis krótkie (tytuł, termin, adres)
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: Colors.white, // upewniamy się, że tytuł jest biały
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(
-                      width: 70,
-                      child: Text(
-                        'Termin',
-                        style: TextStyle(color: Colors.white70),
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        termin,
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(
-                      width: 70,
-                      child: Text(
-                        'Adres',
-                        style: TextStyle(color: Colors.white70),
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        adres,
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
-
-          const SizedBox(width: 12),
-
-          // Prawa: kolumna przycisków (Opis + Raport/Zapisz się)
-          Container(
-            width: 110,
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: innerColor,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Column(
-              children: [
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: onOpis,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      backgroundColor: const Color(0xFF3A4B53),
-                      textStyle: const TextStyle(fontSize: 14),
-                    ),
-                    child: const Text('Opis'),
-                  ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(child: Text('Termin: $termin')),
+              Text(adres, style: const TextStyle(color: Colors.white70)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: onOpis,
+                child: const Text('Opis'),
+                style: TextButton.styleFrom(foregroundColor: Colors.white),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton(
+                onPressed: onRight,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF3A4B53),
                 ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: onRight,
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Colors.white24),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      foregroundColor: Colors.white,
-                    ),
-                    child: Text(rightButtonLabel),
-                  ),
-                ),
-              ],
-            ),
+                child: Text(rightButtonLabel),
+              ),
+            ],
           ),
         ],
       ),
