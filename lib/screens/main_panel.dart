@@ -238,12 +238,10 @@ class _MainPanelState extends State<MainPanel> {
                           ),
                           child: Row(
                             children: [
-                              const CircleAvatar(
+                              // Use initials avatar here
+                              InitialsAvatar(
+                                name: displayNameFromProfile,
                                 radius: 26,
-                                backgroundImage: AssetImage(
-                                  'assets/avatar_placeholder.png',
-                                ),
-                                backgroundColor: Colors.grey,
                               ),
                               const SizedBox(width: 12),
                               Expanded(
@@ -685,6 +683,8 @@ class DescriptionScreen extends StatelessWidget {
       ),
     );
 
+    final name = FirebaseAuth.instance.currentUser?.displayName ?? '';
+
     return Theme(
       data: localTheme,
       child: Scaffold(
@@ -721,13 +721,7 @@ class DescriptionScreen extends StatelessWidget {
                           ),
                           child: Row(
                             children: [
-                              const CircleAvatar(
-                                radius: 22,
-                                backgroundImage: AssetImage(
-                                  'assets/avatar_placeholder.png',
-                                ),
-                                backgroundColor: Colors.grey,
-                              ),
+                              InitialsAvatar(name: name, radius: 22),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
@@ -970,6 +964,8 @@ class _ReportScreenState extends State<ReportScreen> {
       ),
     );
 
+    final name = FirebaseAuth.instance.currentUser?.displayName ?? '';
+
     return Theme(
       data: localTheme,
       child: Scaffold(
@@ -1006,13 +1002,7 @@ class _ReportScreenState extends State<ReportScreen> {
                           ),
                           child: Row(
                             children: [
-                              const CircleAvatar(
-                                radius: 22,
-                                backgroundImage: AssetImage(
-                                  'assets/avatar_placeholder.png',
-                                ),
-                                backgroundColor: Colors.grey,
-                              ),
+                              InitialsAvatar(name: name, radius: 22),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
@@ -1235,6 +1225,62 @@ class TaskCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Widget generujący awatar z inicjałami (deterministyczny kolor na podstawie imienia)
+class InitialsAvatar extends StatelessWidget {
+  final String name;
+  final double radius;
+
+  const InitialsAvatar({super.key, required this.name, this.radius = 20});
+
+  String _getInitials(String input) {
+    final trimmed = input.trim();
+    if (trimmed.isEmpty) return '?';
+    final parts = trimmed.split(RegExp(r'\s+'));
+    if (parts.length == 1) {
+      final p = parts[0];
+      if (p.length >= 2) return p.substring(0, 2).toUpperCase();
+      return p.substring(0, 1).toUpperCase();
+    } else {
+      final a = parts[0].isNotEmpty ? parts[0][0] : '';
+      final b = parts[1].isNotEmpty ? parts[1][0] : '';
+      return (a + b).toUpperCase();
+    }
+  }
+
+  Color _backgroundFromName(String input) {
+    final hash = input.hashCode;
+    final index = hash.abs() % Colors.primaries.length;
+    return Colors.primaries[index].shade700;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final initials = _getInitials(
+      name.isNotEmpty
+          ? name
+          : (FirebaseAuth.instance.currentUser?.email ?? '?'),
+    );
+    final bg = _backgroundFromName(
+      name.isNotEmpty
+          ? name
+          : (FirebaseAuth.instance.currentUser?.email ?? '?'),
+    );
+
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: bg,
+      child: Text(
+        initials,
+        style: TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: radius * 0.6,
+        ),
       ),
     );
   }
