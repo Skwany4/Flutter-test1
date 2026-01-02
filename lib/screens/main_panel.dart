@@ -1,6 +1,10 @@
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class MainPanel extends StatefulWidget {
   const MainPanel({super.key});
@@ -42,10 +46,20 @@ class _MainPanelState extends State<MainPanel> {
   bool loadingProfile = true;
   String displayNameFromProfile = 'Imię';
 
+  // tracking assignments to avoid double clicks (per-item)
+  final Set<String> _assigningIds = {};
+
   @override
   void initState() {
     super.initState();
     _loadProfile();
+  }
+
+  String backendBase() {
+    if (kIsWeb) return 'http://127.0.0.1:8000';
+    if (Platform.isAndroid) return 'http://10.0.2.2:8000';
+    if (Platform.isIOS) return 'http://127.0.0.1:8000';
+    return 'http://127.0.0.1:8000';
   }
 
   Future<void> _load_profile_updateRoleFallback() async {
@@ -91,6 +105,61 @@ class _MainPanelState extends State<MainPanel> {
         displayNameFromProfile = _auth.currentUser?.displayName ?? 'Imię';
         loadingProfile = false;
       });
+    }
+  }
+
+  Future<void> assignOrderViaBackend(String orderId) async {
+    if (_assigningIds.contains(orderId)) return;
+    final user = _auth.currentUser;
+    if (user == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Zaloguj się najpierw')));
+      return;
+    }
+
+    _assigningIds.add(orderId);
+    setState(() {}); // to refresh UI for button disabling
+
+    try {
+      final idToken = await user.getIdToken();
+      final url = Uri.parse('${backendBase()}/orders/$orderId/assign');
+
+      final resp = await http.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer $idToken',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({}), // worker assigns themself -> empty body is fine
+      );
+
+      if (resp.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pomyślnie zapisano do zlecenia')),
+        );
+      } else if (resp.statusCode == 403) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Brak uprawnień: ${resp.body}')));
+      } else if (resp.statusCode == 404) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Zlecenie nie istnieje: ${resp.body}')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Błąd serwera: ${resp.statusCode} ${resp.body}'),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Błąd przy zapisie: $e')));
+    } finally {
+      _assigningIds.remove(orderId);
+      setState(() {});
     }
   }
 
@@ -314,7 +383,10 @@ class _MainPanelState extends State<MainPanel> {
               adres: t['adres'] ?? '',
               onOpis: () => _openOpisScreen(
                 title: t['title'] ?? '',
+                description: '',
+                tools: const [],
                 showSaveButton: false,
+                orderId: null,
               ),
               onRight: () => _openReportScreen(title: t['title'] ?? ''),
               rightButtonLabel: 'Raport',
@@ -346,7 +418,10 @@ class _MainPanelState extends State<MainPanel> {
                     adres: t['adres'] ?? '',
                     onOpis: () => _openOpisScreen(
                       title: t['title'] ?? '',
+                      description: '',
+                      tools: const [],
                       showSaveButton: false,
+                      orderId: null,
                     ),
                     onRight: () => _openReportScreen(title: t['title'] ?? ''),
                     rightButtonLabel: 'Raport',
@@ -367,12 +442,24 @@ class _MainPanelState extends State<MainPanel> {
                 termin = ts.toDate().toIso8601String().split('T').first;
               }
               final adres = raw['location'] as String? ?? '';
+              final description = raw['description'] as String? ?? '';
+              final tools =
+                  (raw['tools'] as List<dynamic>?)
+                      ?.map((e) => e.toString())
+                      .toList() ??
+                  <String>[];
+
               return TaskCard(
                 title: title,
                 termin: termin,
                 adres: adres,
-                onOpis: () =>
-                    _openOpisScreen(title: title, showSaveButton: false),
+                onOpis: () => _openOpisScreen(
+                  title: title,
+                  description: description,
+                  tools: tools,
+                  showSaveButton: false,
+                  orderId: docs[i].id,
+                ),
                 onRight: () => _openReportScreen(title: title),
                 rightButtonLabel: 'Raport',
               );
@@ -412,12 +499,24 @@ class _MainPanelState extends State<MainPanel> {
               termin = ts.toDate().toIso8601String().split('T').first;
             }
             final adres = raw['location'] as String? ?? '';
+            final description = raw['description'] as String? ?? '';
+            final tools =
+                (raw['tools'] as List<dynamic>?)
+                    ?.map((e) => e.toString())
+                    .toList() ??
+                <String>[];
+
             return TaskCard(
               title: title,
               termin: termin,
               adres: adres,
-              onOpis: () =>
-                  _openOpisScreen(title: title, showSaveButton: false),
+              onOpis: () => _openOpisScreen(
+                title: title,
+                description: description,
+                tools: tools,
+                showSaveButton: false,
+                orderId: docs[i].id,
+              ),
               onRight: () => _openReportScreen(title: title),
               rightButtonLabel: 'Raport',
             );
@@ -464,6 +563,14 @@ class _MainPanelState extends State<MainPanel> {
               termin = ts.toDate().toIso8601String().split('T').first;
             }
             final adres = raw['location'] as String? ?? '';
+            final description = raw['description'] as String? ?? '';
+            final tools =
+                (raw['tools'] as List<dynamic>?)
+                    ?.map((e) => e.toString())
+                    .toList() ??
+                <String>[];
+
+            final isAssigning = _assigningIds.contains(id);
 
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 6),
@@ -471,28 +578,19 @@ class _MainPanelState extends State<MainPanel> {
                 title: title,
                 termin: termin,
                 adres: adres,
-                onOpis: () =>
-                    _openOpisScreen(title: title, showSaveButton: true),
+                onOpis: () => _openOpisScreen(
+                  title: title,
+                  description: description,
+                  tools: tools,
+                  showSaveButton: true,
+                  orderId: id,
+                ),
                 onRight: () async {
-                  final user = _auth.currentUser;
-                  if (user == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Zaloguj się najpierw')),
-                    );
-                    return;
-                  }
-                  // przypisz siebie do zlecenia
-                  await _firestore.collection('orders').doc(id).update({
-                    'assignedTo': user.uid,
-                    'status': 'assigned',
-                    'updated_at': FieldValue.serverTimestamp(),
-                    // opcjonalnie dodaj do participants
-                  });
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Zapisano chęć do zlecenia')),
-                  );
+                  // wywołujemy backendowy endpoint, żeby uniknąć ograniczeń reguł Firestore
+                  await assignOrderViaBackend(id);
                 },
                 rightButtonLabel: 'Zapisz się',
+                isLoading: isAssigning,
               ),
             );
           },
@@ -501,12 +599,30 @@ class _MainPanelState extends State<MainPanel> {
     );
   }
 
-  void _openOpisScreen({required String title, required bool showSaveButton}) {
+  void _openOpisScreen({
+    required String title,
+    required String description,
+    required List<String> tools,
+    required bool showSaveButton,
+    required String? orderId,
+  }) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) =>
-            DescriptionScreen(title: title, showSaveButton: showSaveButton),
+        builder: (context) => DescriptionScreen(
+          title: title,
+          description: description,
+          tools: tools,
+          showSaveButton: showSaveButton,
+          onSave: orderId == null
+              ? null
+              : () async {
+                  Navigator.of(
+                    context,
+                  ).pop(); // zamknij szczegóły przed przypisaniem
+                  await assignOrderViaBackend(orderId);
+                },
+        ),
       ),
     );
   }
@@ -526,12 +642,18 @@ class _MainPanelState extends State<MainPanel> {
 /// Ekran z opisem zlecenia (pokazywany po kliknięciu "Opis")
 class DescriptionScreen extends StatelessWidget {
   final String title;
+  final String description;
+  final List<String> tools;
   final bool showSaveButton;
+  final Future<void> Function()? onSave;
 
   const DescriptionScreen({
     super.key,
     required this.title,
+    required this.description,
+    required this.tools,
     required this.showSaveButton,
+    this.onSave,
   });
 
   @override
@@ -693,6 +815,7 @@ class DescriptionScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           title.isNotEmpty ? title : 'Zlecenie',
@@ -704,17 +827,22 @@ class DescriptionScreen extends StatelessWidget {
                         const SizedBox(height: 12),
 
                         // Pole "Opis"
-                        Container(
-                          width: double.infinity,
-                          height: 130,
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: darkBox,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Text(
-                            'Opis',
-                            style: TextStyle(color: Colors.white70),
+                        Expanded(
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: darkBox,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: SingleChildScrollView(
+                              child: Text(
+                                description.isNotEmpty
+                                    ? description
+                                    : 'Brak opisu',
+                                style: const TextStyle(color: Colors.white70),
+                              ),
+                            ),
                           ),
                         ),
 
@@ -723,16 +851,34 @@ class DescriptionScreen extends StatelessWidget {
                         // Pole "Potrzebne narzędzia"
                         Container(
                           width: double.infinity,
-                          height: 110,
-                          padding: const EdgeInsets.all(10),
+                          padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
                             color: darkBox,
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: const Text(
-                            'Potrzebne narzędzia',
-                            style: TextStyle(color: Colors.white70),
-                          ),
+                          child: tools.isEmpty
+                              ? const Text(
+                                  'Brak narzędzi',
+                                  style: TextStyle(color: Colors.white70),
+                                )
+                              : Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: tools
+                                      .map(
+                                        (t) => Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            vertical: 2,
+                                          ),
+                                          child: Text(
+                                            '• $t',
+                                            style: const TextStyle(
+                                              color: Colors.white70,
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                      .toList(),
+                                ),
                         ),
 
                         const SizedBox(height: 18),
@@ -742,12 +888,12 @@ class DescriptionScreen extends StatelessWidget {
                           SizedBox(
                             width: 160,
                             child: ElevatedButton(
-                              onPressed: () {
-                                // tutaj dodasz logikę zapisu do zlecenia
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text('Zapisano się')),
-                                );
-                              },
+                              onPressed: onSave == null
+                                  ? null
+                                  : () async {
+                                      // wywołaj przekazaną funkcję, która przypisze zlecenie
+                                      await onSave!();
+                                    },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF3A4B53),
                                 shape: RoundedRectangleBorder(
@@ -1020,8 +1166,7 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 }
 
-// Prosty widget karty zadania używany w widoku listy.
-// Jeśli masz własną implementację TaskCard w innym pliku, usuń poniższą i importuj tamten.
+/// Prosty widget kafelka zlecenia (rekreacja z oryginalnego projektu)
 class TaskCard extends StatelessWidget {
   final String title;
   final String termin;
@@ -1029,6 +1174,7 @@ class TaskCard extends StatelessWidget {
   final VoidCallback onOpis;
   final VoidCallback onRight;
   final String rightButtonLabel;
+  final bool isLoading;
 
   const TaskCard({
     super.key,
@@ -1038,40 +1184,55 @@ class TaskCard extends StatelessWidget {
     required this.onOpis,
     required this.onRight,
     required this.rightButtonLabel,
+    this.isLoading = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    const cardColor = Color(0xFF222A2F);
+    const cardColor = Color(0xFF2B3740);
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
+      margin: const EdgeInsets.symmetric(horizontal: 6),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: cardColor,
         borderRadius: BorderRadius.circular(10),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(
-            title,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          Expanded(
+            child: InkWell(
+              onTap: onOpis,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 6),
+                  Text('Termin: $termin', style: const TextStyle(fontSize: 12)),
+                  const SizedBox(height: 4),
+                  Text('Adres: $adres', style: const TextStyle(fontSize: 12)),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(child: Text('Termin: $termin')),
-              const SizedBox(width: 8),
-              Expanded(child: Text('Adres: $adres')),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              OutlinedButton(onPressed: onOpis, child: const Text('Opis')),
-              const SizedBox(width: 8),
-              ElevatedButton(onPressed: onRight, child: Text(rightButtonLabel)),
-            ],
+          const SizedBox(width: 8),
+          ElevatedButton(
+            onPressed: isLoading ? null : onRight,
+            child: isLoading
+                ? const SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Text(rightButtonLabel),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF3A4B53),
+            ),
           ),
         ],
       ),
