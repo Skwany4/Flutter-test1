@@ -134,5 +134,47 @@ def assign_order(order_id):
         return jsonify({"msg": "Przypisano wskazanego worker"}), 200
     return jsonify({"msg": "Brak uprawnień"}), 403
 
+# NOWY ENDPOINT: zapisywanie raportu do podkolekcji orders/<order_id>/reports
+@app.route('/orders/<order_id>/report', methods=['POST'])
+@require_firebase_token
+def post_report(order_id):
+    uid = request.firebase_user['uid']
+    # pobierz profil użytkownika (jeśli istnieje)
+    user_doc = db.collection('users').document(uid).get()
+    user = user_doc.to_dict() if user_doc.exists else {}
+    role = user.get('role', 'worker')
+
+    order_ref = db.collection('orders').document(order_id)
+    order_doc = order_ref.get()
+    if not order_doc.exists:
+        return jsonify({"msg": "Zlecenie nie istnieje"}), 404
+    order = order_doc.to_dict()
+
+    # tylko admin lub przypisany wykonawca mogą dodać raport
+    if role != 'admin' and order.get('assignedTo') != uid:
+        return jsonify({"msg": "Brak uprawnień"}), 403
+
+    payload = request.get_json() or {}
+    text = payload.get('text')
+    if not text or not str(text).strip():
+        return jsonify({"msg": "Brakuje treści raportu"}), 400
+
+    report = {
+        'authorUid': uid,
+        'authorName': user.get('displayName') or request.firebase_user.get('name'),
+        'text': text,
+        'created_at': firestore.SERVER_TIMESTAMP
+    }
+
+    write_result = order_ref.collection('reports').add(report)
+    # Bezpieczne wydrukowanie id (różne wersje SDK)
+    try:
+        report_ref = write_result[1]
+        report_id = report_ref.id
+    except Exception:
+        report_id = None
+
+    return jsonify({"msg": "Zapisano raport", "id": report_id}), 201
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8000)
