@@ -386,7 +386,8 @@ class _MainPanelState extends State<MainPanel> {
                 showSaveButton: false,
                 orderId: null,
               ),
-              onRight: () => _openReportScreen(title: t['title'] ?? ''),
+              onRight: () =>
+                  _openReportScreen(title: t['title'] ?? '', orderId: null),
               rightButtonLabel: 'Raport',
             ),
         ],
@@ -421,7 +422,10 @@ class _MainPanelState extends State<MainPanel> {
                       showSaveButton: false,
                       orderId: null,
                     ),
-                    onRight: () => _openReportScreen(title: t['title'] ?? ''),
+                    onRight: () => _openReportScreen(
+                      title: t['title'] ?? '',
+                      orderId: null,
+                    ),
                     rightButtonLabel: 'Raport',
                   ),
               ],
@@ -458,7 +462,8 @@ class _MainPanelState extends State<MainPanel> {
                   showSaveButton: false,
                   orderId: docs[i].id,
                 ),
-                onRight: () => _openReportScreen(title: title),
+                onRight: () =>
+                    _openReportScreen(title: title, orderId: docs[i].id),
                 rightButtonLabel: 'Raport',
               );
             },
@@ -515,7 +520,8 @@ class _MainPanelState extends State<MainPanel> {
                 showSaveButton: false,
                 orderId: docs[i].id,
               ),
-              onRight: () => _openReportScreen(title: title),
+              onRight: () =>
+                  _openReportScreen(title: title, orderId: docs[i].id),
               rightButtonLabel: 'Raport',
             );
           },
@@ -625,10 +631,16 @@ class _MainPanelState extends State<MainPanel> {
     );
   }
 
-  void _openReportScreen({required String title}) {
+  void _openReportScreen({required String title, required String? orderId}) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => ReportScreen(title: title)),
+      MaterialPageRoute(
+        builder: (context) => ReportScreen(
+          title: title,
+          orderId: orderId,
+          backendBase: backendBase,
+        ),
+      ),
     );
   }
 
@@ -916,8 +928,15 @@ class DescriptionScreen extends StatelessWidget {
 /// Ekran raportu (pokazywany po kliknięciu "Raport")
 class ReportScreen extends StatefulWidget {
   final String title;
+  final String? orderId;
+  final String Function() backendBase;
 
-  const ReportScreen({super.key, required this.title});
+  const ReportScreen({
+    super.key,
+    required this.title,
+    required this.orderId,
+    required this.backendBase,
+  });
 
   @override
   State<ReportScreen> createState() => _ReportScreenState();
@@ -925,8 +944,9 @@ class ReportScreen extends StatefulWidget {
 
 class _ReportScreenState extends State<ReportScreen> {
   final TextEditingController _controller = TextEditingController();
+  bool _sending = false;
 
-  bool get _canSend => _controller.text.trim().isNotEmpty;
+  bool get _canSend => _controller.text.trim().isNotEmpty && !_sending;
 
   @override
   void initState() {
@@ -938,6 +958,77 @@ class _ReportScreenState extends State<ReportScreen> {
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  Future<void> _sendReport() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty) return;
+
+    // Jeśli nie mamy orderId — nie wysyłamy do backendu (można ewentualnie zapisać lokalnie)
+    if (widget.orderId == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Brak id zlecenia')));
+      return;
+    }
+
+    setState(() {
+      _sending = true;
+    });
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Zaloguj się najpierw')));
+        return;
+      }
+      final idToken = await user.getIdToken();
+      final url = Uri.parse(
+        '${widget.backendBase()}/orders/${widget.orderId}/report',
+      );
+
+      final resp = await http.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer $idToken',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'text': text}),
+      );
+
+      if (resp.statusCode == 201 || resp.statusCode == 200) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Wysłano raport')));
+        Navigator.pop(context);
+      } else if (resp.statusCode == 403) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Brak uprawnień: ${resp.body}')));
+      } else if (resp.statusCode == 404) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Zlecenie nie istnieje: ${resp.body}')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Błąd serwera: ${resp.statusCode} ${resp.body}'),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Błąd przy wysyłce raportu: $e')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sending = false;
+        });
+      }
+    }
   }
 
   @override
@@ -1126,20 +1217,17 @@ class _ReportScreenState extends State<ReportScreen> {
                               child: const Text('Anuluj'),
                             ),
                             ElevatedButton(
-                              onPressed: _canSend
-                                  ? () {
-                                      // tutaj możesz zapisać raport do Firestore lub wysłać go gdzieś
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('Wysłano raport'),
-                                        ),
-                                      );
-                                      Navigator.pop(context);
-                                    }
-                                  : null,
-                              child: const Text('Wyślij'),
+                              onPressed: _canSend ? _sendReport : null,
+                              child: _sending
+                                  ? const SizedBox(
+                                      height: 16,
+                                      width: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Text('Wyślij'),
                             ),
                           ],
                         ),

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'main_panel.dart';
+import 'admin_panel.dart';
 import '../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -59,7 +60,25 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (response.statusCode == 200) {
-        // Sukces -> przejście do panelu
+        // Parsujemy odpowiedź aby sprawdzić rolę i przekierować admina bezpośrednio
+        try {
+          final Map<String, dynamic> profile =
+              jsonDecode(response.body) as Map<String, dynamic>;
+          final role = (profile['role'] as String?) ?? 'worker';
+          if (role == 'admin') {
+            if (mounted) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const AdminPanel()),
+              );
+            }
+            return;
+          }
+        } catch (_) {
+          // jeśli parsowanie się nie uda, fallback do MainPanel
+        }
+
+        // Domyślnie przejdź do panelu użytkownika
         if (mounted) {
           Navigator.pushReplacement(
             context,
