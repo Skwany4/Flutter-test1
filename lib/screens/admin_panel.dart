@@ -85,7 +85,6 @@ class _AdminPanelState extends State<AdminPanel> {
         _currentOrders = [];
       }
     } catch (e) {
-      // ignore but show snackbar
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Błąd ładowania list: $e')));
@@ -309,9 +308,10 @@ class _AdminPanelState extends State<AdminPanel> {
     );
   }
 
-  Widget _buildCreateOrderCard() {
+  Widget _buildCreateOrderCard(Color panel, Color darkBox) {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8),
+      color: panel,
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -350,6 +350,9 @@ class _AdminPanelState extends State<AdminPanel> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _creatingOrder ? null : _createOrder,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF3A4B53),
+                ),
                 child: _creatingOrder
                     ? const SizedBox(
                         height: 16,
@@ -368,9 +371,10 @@ class _AdminPanelState extends State<AdminPanel> {
     );
   }
 
-  Widget _buildCreateUserCard() {
+  Widget _buildCreateUserCard(Color panel, Color darkBox) {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 8),
+      color: panel,
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -420,6 +424,9 @@ class _AdminPanelState extends State<AdminPanel> {
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _creatingUser ? null : _createUser,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF3A4B53),
+                ),
                 child: _creatingUser
                     ? const SizedBox(
                         height: 16,
@@ -438,10 +445,8 @@ class _AdminPanelState extends State<AdminPanel> {
     );
   }
 
-  Widget _buildAvailableList() {
+  Widget _buildAvailableListWidget(Color panel) {
     if (_loadingLists) return const Center(child: CircularProgressIndicator());
-    if (_availableOrders.isEmpty)
-      return const Center(child: Text('Brak dostępnych zleceń'));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -453,13 +458,26 @@ class _AdminPanelState extends State<AdminPanel> {
         for (var o in _availableOrders)
           Card(
             margin: const EdgeInsets.symmetric(vertical: 6),
+            color: panel,
             child: ListTile(
-              title: Text(o['title'] ?? ''),
-              subtitle: Text('${o['trade'] ?? ''} — ${o['location'] ?? ''}'),
+              title: Text(
+                o['title'] ?? '',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              subtitle: Text(
+                '${o['trade'] ?? ''} — ${o['location'] ?? ''}',
+                style: const TextStyle(color: Colors.white70),
+              ),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(o['status'] ?? ''),
+                  Text(
+                    o['status'] ?? '',
+                    style: const TextStyle(color: Colors.white),
+                  ),
                   const SizedBox(width: 8),
                   IconButton(
                     icon: const Icon(Icons.article_outlined),
@@ -477,7 +495,7 @@ class _AdminPanelState extends State<AdminPanel> {
     );
   }
 
-  Widget _buildCurrentList() {
+  Widget _buildCurrentListWidget(Color panel) {
     if (_loadingLists) return const Center(child: CircularProgressIndicator());
     if (_currentOrders.isEmpty) return const Center(child: Text('Brak zadań'));
     return Column(
@@ -491,24 +509,36 @@ class _AdminPanelState extends State<AdminPanel> {
         for (var o in _currentOrders)
           Card(
             margin: const EdgeInsets.symmetric(vertical: 6),
+            color: panel,
             child: ListTile(
-              title: Text(o['title'] ?? ''),
+              title: Text(
+                o['title'] ?? '',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               subtitle: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'Branża: ${o['trade'] ?? ''}  •  Lokalizacja: ${o['location'] ?? ''}',
+                    style: const TextStyle(color: Colors.white70),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'Przypisany: ${o['assignedUser'] != null ? (o['assignedUser']['displayName'] ?? o['assignedUser']['uid']) : '—'}',
+                    style: const TextStyle(color: Colors.white70),
                   ),
                 ],
               ),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(o['status'] ?? ''),
+                  Text(
+                    o['status'] ?? '',
+                    style: const TextStyle(color: Colors.white),
+                  ),
                   const SizedBox(width: 8),
                   IconButton(
                     icon: const Icon(Icons.article_outlined),
@@ -528,26 +558,220 @@ class _AdminPanelState extends State<AdminPanel> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Panel administratora')),
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _loadLists,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              children: [
-                _buildCreateOrderCard(),
-                _buildCreateUserCard(),
-                const SizedBox(height: 8),
-                _buildAvailableList(),
-                const SizedBox(height: 12),
-                _buildCurrentList(),
-                const SizedBox(height: 40),
-              ],
+    // Colors and theming matched with main_panel
+    const bg = Color(0xFF1F2A30);
+    const panel = Color(0xFF2F3B42);
+    const innerPanel = Color(0xFF222A2F);
+
+    final localTheme = Theme.of(context).copyWith(
+      textTheme: Theme.of(
+        context,
+      ).textTheme.apply(bodyColor: Colors.white, displayColor: Colors.white),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: panel,
+        foregroundColor: Colors.white,
+        iconTheme: IconThemeData(color: Colors.white),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(foregroundColor: Colors.white),
+      ),
+      inputDecorationTheme: const InputDecorationTheme(
+        hintStyle: TextStyle(color: Colors.white70),
+        labelStyle: TextStyle(color: Colors.white70),
+      ),
+    );
+
+    return Theme(
+      data: localTheme,
+      child: Scaffold(
+        backgroundColor: bg,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: RefreshIndicator(
+              onRefresh: _loadLists,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Column(
+                  children: [
+                    // Header - profile + quick buttons (styled like main_panel)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: panel,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 12,
+                                horizontal: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: innerPanel,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  InitialsAvatar(
+                                    name:
+                                        _auth.currentUser?.displayName ??
+                                        (_auth.currentUser?.email ?? ''),
+                                    radius: 26,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          _auth.currentUser?.displayName ??
+                                              'Administrator',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          _auth.currentUser?.email ??
+                                              'email@domena',
+                                        ),
+                                        const SizedBox(height: 4),
+                                        const Text(
+                                          'Panel administratora',
+                                          style: TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 1,
+                            child: Column(
+                              children: [
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton(
+                                    onPressed: _loadLists,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF3A4B53),
+                                    ),
+                                    child: const Text('Odśwież'),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton(
+                                    onPressed: () async {
+                                      await _auth.signOut();
+                                      if (mounted) Navigator.pop(context);
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF2B3740),
+                                    ),
+                                    child: const Text('Wyloguj'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Main content panel (cards + lists)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: panel,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(
+                        children: [
+                          _buildCreateOrderCard(panel, innerPanel),
+                          _buildCreateUserCard(panel, innerPanel),
+                          const SizedBox(height: 8),
+                          _buildAvailableListWidget(panel),
+                          const SizedBox(height: 12),
+                          _buildCurrentListWidget(panel),
+                          const SizedBox(height: 20),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Simple initials avatar copied to keep admin panel self-contained.
+/// Uses FirebaseAuth currentUser fallback if name is empty.
+class InitialsAvatar extends StatelessWidget {
+  final String name;
+  final double radius;
+
+  const InitialsAvatar({super.key, required this.name, this.radius = 20});
+
+  String _getInitials(String input) {
+    final trimmed = input.trim();
+    if (trimmed.isEmpty) return '?';
+    final parts = trimmed.split(RegExp(r'\s+'));
+    if (parts.length == 1) {
+      final p = parts[0];
+      if (p.length >= 2) return p.substring(0, 2).toUpperCase();
+      return p.substring(0, 1).toUpperCase();
+    } else {
+      final a = parts[0].isNotEmpty ? parts[0][0] : '';
+      final b = parts[1].isNotEmpty ? parts[1][0] : '';
+      return (a + b).toUpperCase();
+    }
+  }
+
+  Color _backgroundFromName(String input) {
+    final hash = input.hashCode;
+    final index = hash.abs() % Colors.primaries.length;
+    return Colors.primaries[index].shade700;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final displayName = name.isNotEmpty
+        ? name
+        : (FirebaseAuth.instance.currentUser?.email ?? '?');
+    final initials = _getInitials(displayName);
+    final bg = _backgroundFromName(displayName);
+
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: bg,
+      child: Text(
+        initials,
+        style: TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: radius * 0.6,
         ),
       ),
     );

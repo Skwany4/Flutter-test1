@@ -5,6 +5,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:intl/intl.dart'; // Dodano dla formatowania dat
+import 'dart:async';
 
 class MainPanel extends StatefulWidget {
   const MainPanel({super.key});
@@ -43,6 +45,7 @@ class _MainPanelState extends State<MainPanel> {
   // profil użytkownika
   String? role;
   String? trade;
+  String? email;
   bool loadingProfile = true;
   String displayNameFromProfile = 'Imię';
 
@@ -59,11 +62,7 @@ class _MainPanelState extends State<MainPanel> {
     if (kIsWeb) return 'http://127.0.0.1:8000';
     if (Platform.isAndroid) return 'http://10.0.2.2:8000';
     if (Platform.isIOS) return 'http://127.0.0.1:8000';
-    return 'http://127.0.0.1:8000';
-  }
-
-  Future<void> _load_profile_updateRoleFallback() async {
-    // kept for potential future adjustments
+    return 'http://127.0.0.1:8000'; // W produkcji zmień na realny URL
   }
 
   Future<void> _loadProfile() async {
@@ -73,6 +72,7 @@ class _MainPanelState extends State<MainPanel> {
         role = 'worker';
         trade = null;
         displayNameFromProfile = 'Imię';
+        email = 'email@domena';
         loadingProfile = false;
       });
       return;
@@ -84,16 +84,18 @@ class _MainPanelState extends State<MainPanel> {
         setState(() {
           // only two roles in DB: 'admin' and 'worker' (fallback to 'worker')
           role = (data['role'] as String?) == 'admin' ? 'admin' : 'worker';
-          trade = (data['trade'] as String?) ?? null;
+          trade = (data['trade'] as String?) ?? 'nie ustawiono';
           displayNameFromProfile =
               (data['displayName'] as String?) ?? user.displayName ?? 'Imię';
+          email = user.email ?? 'email@domena';
           loadingProfile = false;
         });
       } else {
         setState(() {
           role = 'worker';
-          trade = null;
+          trade = 'nie ustawiono';
           displayNameFromProfile = user.displayName ?? 'Imię';
+          email = user.email ?? 'email@domena';
           loadingProfile = false;
         });
       }
@@ -101,10 +103,14 @@ class _MainPanelState extends State<MainPanel> {
       // jeśli błąd - użyj domyślnych wartości
       setState(() {
         role = 'worker';
-        trade = null;
+        trade = 'nie ustawiono';
         displayNameFromProfile = _auth.currentUser?.displayName ?? 'Imię';
+        email = _auth.currentUser?.email ?? 'email@domena';
         loadingProfile = false;
       });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Błąd ładowania profilu: $e')));
     }
   }
 
@@ -125,14 +131,18 @@ class _MainPanelState extends State<MainPanel> {
       final idToken = await user.getIdToken();
       final url = Uri.parse('${backendBase()}/orders/$orderId/assign');
 
-      final resp = await http.post(
-        url,
-        headers: {
-          'Authorization': 'Bearer $idToken',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({}), // worker assigns themself -> empty body is fine
-      );
+      final resp = await http
+          .post(
+            url,
+            headers: {
+              'Authorization': 'Bearer $idToken',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode(
+              {},
+            ), // worker assigns themself -> empty body is fine
+          )
+          .timeout(const Duration(seconds: 10)); // Dodano timeout
 
       if (resp.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -153,6 +163,10 @@ class _MainPanelState extends State<MainPanel> {
           ),
         );
       }
+    } on TimeoutException {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Przekroczono limit czasu połączenia')),
+      );
     } catch (e) {
       ScaffoldMessenger.of(
         context,
@@ -161,6 +175,14 @@ class _MainPanelState extends State<MainPanel> {
       _assigningIds.remove(orderId);
       setState(() {});
     }
+  }
+
+  String formatDate(dynamic date) {
+    if (date is String) return date;
+    if (date is Timestamp) {
+      return DateFormat('yyyy-MM-dd').format(date.toDate());
+    }
+    return '';
   }
 
   @override
@@ -216,127 +238,23 @@ class _MainPanelState extends State<MainPanel> {
             child: Column(
               children: [
                 // Nagłówek z profilem i przyciskami widoku
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: panel,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    children: [
-                      // Profil użytkownika (lewa część)
-                      Expanded(
-                        flex: 3,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 12,
-                            horizontal: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: innerPanel,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            children: [
-                              // Use initials avatar here
-                              InitialsAvatar(
-                                name: displayNameFromProfile,
-                                radius: 26,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      displayNameFromProfile,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      _auth.currentUser?.email ??
-                                          'email@domena',
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'Zawód: ${trade ?? 'nie ustawiono'}',
-                                      style: const TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(width: 12),
-
-                      // Przyciski: Aktualne / Dostępne
-                      Expanded(
-                        flex: 1,
-                        child: Column(
-                          children: [
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: () {
-                                  setState(() {
-                                    showAvailable = false;
-                                  });
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: showAvailable
-                                      ? const Color(0xFF2B3740)
-                                      : const Color(0xFF3A4B53),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                    horizontal: 8,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: const Text('Aktualne zlecenia'),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: () {
-                                  setState(() {
-                                    showAvailable = true;
-                                  });
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: showAvailable
-                                      ? const Color(0xFF3A4B53)
-                                      : const Color(0xFF2B3740),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                    horizontal: 8,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: const Text('Dostępne zlecenia'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                HeaderPanel(
+                  showButtons: true,
+                  showAvailable: showAvailable,
+                  onCurrentPressed: () {
+                    setState(() {
+                      showAvailable = false;
+                    });
+                  },
+                  onAvailablePressed: () {
+                    setState(() {
+                      showAvailable = true;
+                    });
+                  },
+                  displayName: displayNameFromProfile,
+                  email: email ?? 'email@domena',
+                  trade: trade ?? 'nie ustawiono',
                 ),
-
                 const SizedBox(height: 14),
 
                 // Główna sekcja z listą zleceń
@@ -407,42 +325,14 @@ class _MainPanelState extends State<MainPanel> {
             return const Center(child: CircularProgressIndicator());
           final docs = snapshot.data!.docs;
           if (docs.isEmpty) {
-            return ListView(
-              children: [
-                const SizedBox(height: 12),
-                for (var t in sampleTasks)
-                  TaskCard(
-                    title: t['title'] ?? '',
-                    termin: t['termin'] ?? '',
-                    adres: t['adres'] ?? '',
-                    onOpis: () => _openOpisScreen(
-                      title: t['title'] ?? '',
-                      description: '',
-                      tools: const [],
-                      showSaveButton: false,
-                      orderId: null,
-                    ),
-                    onRight: () => _openReportScreen(
-                      title: t['title'] ?? '',
-                      orderId: null,
-                    ),
-                    rightButtonLabel: 'Raport',
-                  ),
-              ],
-            );
+            return const Center(child: Text('Brak aktualnych zleceń'));
           }
           return ListView.builder(
             itemCount: docs.length,
             itemBuilder: (context, i) {
               final raw = docs[i].data() as Map<String, dynamic>;
               final title = raw['title'] as String? ?? '';
-              String termin = '';
-              if (raw['termin'] != null) {
-                termin = raw['termin'].toString();
-              } else if (raw['created_at'] is Timestamp) {
-                final ts = raw['created_at'] as Timestamp;
-                termin = ts.toDate().toIso8601String().split('T').first;
-              }
+              final termin = formatDate(raw['termin'] ?? raw['created_at']);
               final adres = raw['location'] as String? ?? '';
               final description = raw['description'] as String? ?? '';
               final tools =
@@ -494,13 +384,7 @@ class _MainPanelState extends State<MainPanel> {
           itemBuilder: (context, i) {
             final raw = docs[i].data() as Map<String, dynamic>;
             final title = raw['title'] as String? ?? '';
-            String termin = '';
-            if (raw['termin'] != null) {
-              termin = raw['termin'].toString();
-            } else if (raw['created_at'] is Timestamp) {
-              final ts = raw['created_at'] as Timestamp;
-              termin = ts.toDate().toIso8601String().split('T').first;
-            }
+            final termin = formatDate(raw['termin'] ?? raw['created_at']);
             final adres = raw['location'] as String? ?? '';
             final description = raw['description'] as String? ?? '';
             final tools =
@@ -559,13 +443,7 @@ class _MainPanelState extends State<MainPanel> {
             final raw = docs[index].data() as Map<String, dynamic>;
             final id = docs[index].id;
             final title = raw['title'] as String? ?? '';
-            String termin = '';
-            if (raw['termin'] != null) {
-              termin = raw['termin'].toString();
-            } else if (raw['created_at'] is Timestamp) {
-              final ts = raw['created_at'] as Timestamp;
-              termin = ts.toDate().toIso8601String().split('T').first;
-            }
+            final termin = formatDate(raw['termin'] ?? raw['created_at']);
             final adres = raw['location'] as String? ?? '';
             final description = raw['description'] as String? ?? '';
             final tools =
@@ -626,6 +504,9 @@ class _MainPanelState extends State<MainPanel> {
                   ).pop(); // zamknij szczegóły przed przypisaniem
                   await assignOrderViaBackend(orderId);
                 },
+          displayName: displayNameFromProfile,
+          email: email ?? 'email@domena',
+          trade: trade ?? 'nie ustawiono',
         ),
       ),
     );
@@ -639,13 +520,146 @@ class _MainPanelState extends State<MainPanel> {
           title: title,
           orderId: orderId,
           backendBase: backendBase,
+          displayName: displayNameFromProfile,
+          email: email ?? 'email@domena',
+          trade: trade ?? 'nie ustawiono',
         ),
       ),
     );
   }
+}
 
-  void _showSnack(String text) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+/// Wyodrębniony widget nagłówka
+class HeaderPanel extends StatelessWidget {
+  final bool showButtons;
+  final bool showAvailable;
+  final VoidCallback? onCurrentPressed;
+  final VoidCallback? onAvailablePressed;
+  final String displayName;
+  final String email;
+  final String trade;
+
+  const HeaderPanel({
+    super.key,
+    this.showButtons = true,
+    this.showAvailable = false,
+    this.onCurrentPressed,
+    this.onAvailablePressed,
+    required this.displayName,
+    required this.email,
+    required this.trade,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const panel = Color(0xFF2F3B42);
+    const innerPanel = Color(0xFF222A2F);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: panel,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          // Profil użytkownika (lewa część)
+          Expanded(
+            flex: 3,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+              decoration: BoxDecoration(
+                color: innerPanel,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  // Use initials avatar here
+                  InitialsAvatar(name: displayName, radius: 26),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          displayName.split(' ').first ?? 'Imię',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          displayName.split(' ').length > 1
+                              ? displayName.split(' ').skip(1).join(' ')
+                              : 'Nazwisko',
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Zawód: $trade',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 12),
+
+          // Przyciski: Aktualne / Dostępne
+          Expanded(
+            flex: 1,
+            child: Column(
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: showButtons ? onCurrentPressed : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: showAvailable
+                          ? const Color(0xFF2B3740)
+                          : const Color(0xFF3A4B53),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 8,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text('Aktualne zlecenia'),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: showButtons ? onAvailablePressed : null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: showAvailable
+                          ? const Color(0xFF3A4B53)
+                          : const Color(0xFF2B3740),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 8,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text('Dostępne zlecenia'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -656,6 +670,9 @@ class DescriptionScreen extends StatelessWidget {
   final List<String> tools;
   final bool showSaveButton;
   final Future<void> Function()? onSave;
+  final String displayName;
+  final String email;
+  final String trade;
 
   const DescriptionScreen({
     super.key,
@@ -664,13 +681,15 @@ class DescriptionScreen extends StatelessWidget {
     required this.tools,
     required this.showSaveButton,
     this.onSave,
+    required this.displayName,
+    required this.email,
+    required this.trade,
   });
 
   @override
   Widget build(BuildContext context) {
     const bg = Color(0xFF1F2A30);
     const panel = Color(0xFF2F3B42);
-    const innerPanel = Color(0xFF222A2F);
     const darkBox = Color(0xFF16191C);
 
     // Lokalny Theme dla tego ekranu opisu
@@ -695,8 +714,6 @@ class DescriptionScreen extends StatelessWidget {
       ),
     );
 
-    final name = FirebaseAuth.instance.currentUser?.displayName ?? '';
-
     return Theme(
       data: localTheme,
       child: Scaffold(
@@ -712,101 +729,11 @@ class DescriptionScreen extends StatelessWidget {
             child: Column(
               children: [
                 // Górna karta z profilem i przyciskami (tak jak w widoku głównym)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: panel,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 12,
-                            horizontal: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: innerPanel,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            children: [
-                              InitialsAvatar(name: name, radius: 22),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: const [
-                                    Text(
-                                      'Imię',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    SizedBox(height: 4),
-                                    Text('Nazwisko'),
-                                    SizedBox(height: 4),
-                                    Text(
-                                      'Zawód',
-                                      style: TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      // przyciski informacyjne - tylko wizualnie
-                      Expanded(
-                        flex: 1,
-                        child: Column(
-                          children: [
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: null,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF3A4B53),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: const Text('Aktualne zlecenia'),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: null,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF2B3740),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: const Text('Dostępne zlecenia'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                HeaderPanel(
+                  showButtons: false,
+                  displayName: displayName,
+                  email: email,
+                  trade: trade,
                 ),
 
                 const SizedBox(height: 14),
@@ -930,12 +857,18 @@ class ReportScreen extends StatefulWidget {
   final String title;
   final String? orderId;
   final String Function() backendBase;
+  final String displayName;
+  final String email;
+  final String trade;
 
   const ReportScreen({
     super.key,
     required this.title,
     required this.orderId,
     required this.backendBase,
+    required this.displayName,
+    required this.email,
+    required this.trade,
   });
 
   @override
@@ -989,14 +922,16 @@ class _ReportScreenState extends State<ReportScreen> {
         '${widget.backendBase()}/orders/${widget.orderId}/report',
       );
 
-      final resp = await http.post(
-        url,
-        headers: {
-          'Authorization': 'Bearer $idToken',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({'text': text}),
-      );
+      final resp = await http
+          .post(
+            url,
+            headers: {
+              'Authorization': 'Bearer $idToken',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({'text': text}),
+          )
+          .timeout(const Duration(seconds: 10));
 
       if (resp.statusCode == 201 || resp.statusCode == 200) {
         ScaffoldMessenger.of(
@@ -1018,6 +953,10 @@ class _ReportScreenState extends State<ReportScreen> {
           ),
         );
       }
+    } on TimeoutException {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Przekroczono limit czasu połączenia')),
+      );
     } catch (e) {
       ScaffoldMessenger.of(
         context,
@@ -1035,8 +974,9 @@ class _ReportScreenState extends State<ReportScreen> {
   Widget build(BuildContext context) {
     const bg = Color(0xFF1F2A30);
     const panel = Color(0xFF2F3B42);
-    const innerPanel = Color(0xFF222A2F);
-    const reportBox = Color(0xFFD9D9D9); // jasny box imitujący pole raportu
+    const reportBox = Color(
+      0xFF333D44,
+    ); // Zmieniono na ciemniejszy dla kontrastu
 
     final localTheme = Theme.of(context).copyWith(
       textTheme: Theme.of(
@@ -1048,14 +988,12 @@ class _ReportScreenState extends State<ReportScreen> {
         iconTheme: IconThemeData(color: Colors.white),
       ),
       inputDecorationTheme: const InputDecorationTheme(
-        hintStyle: TextStyle(color: Colors.black54),
+        hintStyle: TextStyle(color: Colors.white70),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(foregroundColor: Colors.white),
       ),
     );
-
-    final name = FirebaseAuth.instance.currentUser?.displayName ?? '';
 
     return Theme(
       data: localTheme,
@@ -1072,101 +1010,11 @@ class _ReportScreenState extends State<ReportScreen> {
             child: Column(
               children: [
                 // Górna karta z profilem i przyciskami (wizualnie)
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: panel,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 12,
-                            horizontal: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: innerPanel,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(
-                            children: [
-                              InitialsAvatar(name: name, radius: 22),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: const [
-                                    Text(
-                                      'Imię',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    SizedBox(height: 4),
-                                    Text('Nazwisko'),
-                                    SizedBox(height: 4),
-                                    Text(
-                                      'Zawód',
-                                      style: TextStyle(
-                                        color: Colors.white70,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      // przyciski informacyjne - tylko wizualnie
-                      Expanded(
-                        flex: 1,
-                        child: Column(
-                          children: [
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: null,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF3A4B53),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: const Text('Aktualne zlecenia'),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: null,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF2B3740),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: const Text('Dostępne zlecenia'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                HeaderPanel(
+                  showButtons: false,
+                  displayName: widget.displayName,
+                  email: widget.email,
+                  trade: widget.trade,
                 ),
 
                 const SizedBox(height: 14),
@@ -1203,7 +1051,9 @@ class _ReportScreenState extends State<ReportScreen> {
                             maxLines: null,
                             decoration: const InputDecoration.collapsed(
                               hintText: 'Wpisz raport...',
+                              hintStyle: TextStyle(color: Colors.white70),
                             ),
+                            style: const TextStyle(color: Colors.white),
                           ),
                         ),
                         const SizedBox(height: 12),

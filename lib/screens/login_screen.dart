@@ -1,3 +1,4 @@
+// (zmodyfikowany) lib/screens/login_screen.dart
 import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -105,6 +106,101 @@ class _LoginScreenState extends State<LoginScreen> {
         });
       }
     }
+  }
+
+  // NOWE: pokazuje dialog do resetu hasła
+  Future<void> _showResetPasswordDialog() async {
+    String email = _emailController.text.trim();
+    final formKey = GlobalKey<FormState>();
+    bool sending = false;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text('Reset hasła'),
+              content: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Wprowadź adres e-mail konta. Wyślemy link do zresetowania hasła.',
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      initialValue: email,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: const InputDecoration(labelText: 'Email'),
+                      onChanged: (v) => email = v.trim(),
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) return 'Wpisz email';
+                        if (!v.contains('@')) return 'Nieprawidłowy email';
+                        return null;
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: sending ? null : () => Navigator.of(ctx).pop(),
+                  child: const Text('Anuluj'),
+                ),
+                ElevatedButton(
+                  onPressed: sending
+                      ? null
+                      : () async {
+                          if (formKey.currentState != null &&
+                              !formKey.currentState!.validate()) {
+                            return;
+                          }
+                          setStateDialog(() => sending = true);
+                          try {
+                            await FirebaseAuth.instance.sendPasswordResetEmail(
+                              email: email,
+                            );
+                            Navigator.of(ctx).pop();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Wysłaliśmy email z linkiem resetującym hasło. Sprawdź skrzynkę.',
+                                ),
+                              ),
+                            );
+                          } on FirebaseAuthException catch (e) {
+                            setStateDialog(() => sending = false);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Błąd: ${e.message ?? e.code}'),
+                              ),
+                            );
+                          } catch (e) {
+                            setStateDialog(() => sending = false);
+                            ScaffoldMessenger.of(
+                              context,
+                            ).showSnackBar(SnackBar(content: Text('Błąd: $e')));
+                          }
+                        },
+                  child: sending
+                      ? const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Wyślij link'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   // Usuń możliwość rejestracji w UI — konta będzie tworzył admin (później)
@@ -221,13 +317,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  // Usuń przycisk rejestracji — użytkownicy nie mogą sami tworzyć kont
+                  // Pokazuje dialog resetu hasła
                   TextButton(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Konta tworzy admin')),
-                      );
-                    },
+                    onPressed: _showResetPasswordDialog,
                     child: const Text(
                       'Zapomniałem hasła',
                       style: TextStyle(color: Color(0xff1b263b)),
