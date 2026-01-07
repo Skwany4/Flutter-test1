@@ -300,6 +300,12 @@ def admin_available_orders():
     for d in docs:
         data = d.to_dict()
         data['id'] = d.id
+        # check if there is at least one report
+        try:
+            reports = d.reference.collection('reports').limit(1).get()
+            data['hasReports'] = len(reports) > 0
+        except Exception:
+            data['hasReports'] = False
         orders.append(data)
     return jsonify(orders), 200
 
@@ -333,6 +339,14 @@ def admin_current_orders():
                 data['assignedUser'] = {'uid': assigned_uid}
         else:
             data['assignedUser'] = None
+
+        # check if there is at least one report for this order
+        try:
+            reports = d.reference.collection('reports').limit(1).get()
+            data['hasReports'] = len(reports) > 0
+        except Exception:
+            data['hasReports'] = False
+
         orders.append(data)
     return jsonify(orders), 200
 
@@ -351,6 +365,20 @@ def admin_create_order():
     if not title or not trade:
         return jsonify({"msg": "Brakuje title/trade"}), 400
 
+    # Parse tools: accept list or comma-separated string
+    tools_payload = payload.get('tools', [])
+    tools = []
+    try:
+        if isinstance(tools_payload, str):
+            tools = [s.strip() for s in tools_payload.split(',') if s.strip()]
+        elif isinstance(tools_payload, list):
+            # ensure strings
+            tools = [str(s).strip() for s in tools_payload if str(s).strip()]
+        else:
+            tools = []
+    except Exception:
+        tools = []
+
     order = {
         'title': title,
         'description': payload.get('description'),
@@ -360,6 +388,7 @@ def admin_create_order():
         'location': payload.get('location'),
         'ownerUid': uid,
         'assignedTo': payload.get('assignedTo', None),
+        'tools': tools,
         'created_at': firestore.SERVER_TIMESTAMP,
         'updated_at': firestore.SERVER_TIMESTAMP
     }

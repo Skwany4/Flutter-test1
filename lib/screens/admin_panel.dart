@@ -21,6 +21,7 @@ class _AdminPanelState extends State<AdminPanel> {
   final _orderDescription = TextEditingController();
   final _orderPrice = TextEditingController();
   final _orderLocation = TextEditingController();
+  final _orderTools = TextEditingController();
   bool _creatingOrder = false;
 
   // CREATE USER controllers
@@ -35,6 +36,11 @@ class _AdminPanelState extends State<AdminPanel> {
   List<dynamic> _availableOrders = [];
   List<dynamic> _currentOrders = [];
   bool _loadingLists = false;
+
+  // Filters (local)
+  String _filterQuery = '';
+  String _filterStatus = 'all'; // all, open, assigned, closed
+  bool _filterHasReports = false; // new: only show orders with reports
 
   String backendBase() {
     if (kIsWeb) return 'http://127.0.0.1:8000';
@@ -107,6 +113,14 @@ class _AdminPanelState extends State<AdminPanel> {
     setState(() => _creatingOrder = true);
     try {
       final token = await _idToken();
+      final toolsList = _orderTools.text.trim().isEmpty
+          ? []
+          : _orderTools.text
+                .trim()
+                .split(',')
+                .map((s) => s.trim())
+                .where((s) => s.isNotEmpty)
+                .toList();
       final resp = await http.post(
         Uri.parse('${backendBase()}/admin/orders'),
         headers: {
@@ -122,6 +136,7 @@ class _AdminPanelState extends State<AdminPanel> {
               : double.tryParse(_orderPrice.text),
           'location': _orderLocation.text.trim(),
           'status': 'open',
+          'tools': toolsList,
         }),
       );
       if (resp.statusCode == 201) {
@@ -133,6 +148,7 @@ class _AdminPanelState extends State<AdminPanel> {
         _orderDescription.clear();
         _orderPrice.clear();
         _orderLocation.clear();
+        _orderTools.clear();
         await _loadLists();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -345,6 +361,13 @@ class _AdminPanelState extends State<AdminPanel> {
               controller: _orderLocation,
               decoration: const InputDecoration(labelText: 'Lokalizacja'),
             ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _orderTools,
+              decoration: const InputDecoration(
+                labelText: 'Narzędzia (oddzielone przecinkami)',
+              ),
+            ),
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
@@ -447,6 +470,22 @@ class _AdminPanelState extends State<AdminPanel> {
 
   Widget _buildAvailableListWidget(Color panel) {
     if (_loadingLists) return const Center(child: CircularProgressIndicator());
+    // Apply local filters
+    final query = _filterQuery.toLowerCase().trim();
+    final statusFilter = _filterStatus;
+    final hasReportsFilter = _filterHasReports;
+    final filtered = _availableOrders.where((o) {
+      final title = (o['title'] ?? '').toString().toLowerCase();
+      final trade = (o['trade'] ?? '').toString().toLowerCase();
+      final status = (o['status'] ?? '').toString().toLowerCase();
+      final hasReports = (o['hasReports'] == true);
+      final matchesQuery =
+          query.isEmpty || title.contains(query) || trade.contains(query);
+      final matchesStatus = statusFilter == 'all' || status == statusFilter;
+      final matchesReports = !hasReportsFilter || hasReports;
+      return matchesQuery && matchesStatus && matchesReports;
+    }).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -455,49 +494,125 @@ class _AdminPanelState extends State<AdminPanel> {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
-        for (var o in _availableOrders)
-          Card(
-            margin: const EdgeInsets.symmetric(vertical: 6),
-            color: panel,
-            child: ListTile(
-              title: Text(
-                o['title'] ?? '',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              subtitle: Text(
-                '${o['trade'] ?? ''} — ${o['location'] ?? ''}',
-                style: const TextStyle(color: Colors.white70),
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    o['status'] ?? '',
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.article_outlined),
-                    tooltip: 'Pokaż raporty',
-                    onPressed: () => _showReports(
-                      o['id'] ?? o['id'].toString(),
-                      o['title'] ?? 'Zlecenie',
-                    ),
-                  ),
-                ],
+        // Filters row
+        Row(
+          children: [
+            Expanded(
+              flex: 1,
+              child: TextField(
+                onChanged: (v) => setState(() => _filterQuery = v),
+                decoration: const InputDecoration(hintText: 'Wyszukaj'),
               ),
             ),
-          ),
+            const SizedBox(width: 8),
+            // Colored container around dropdown to change its look
+            Expanded(
+              flex: 1,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3A4B53), // button background color
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: DropdownButton<String>(
+                  value: _filterStatus,
+                  dropdownColor: const Color(0xFF2F3B42), // menu background
+                  underline: const SizedBox(), // remove default underline
+                  isExpanded: true,
+                  iconEnabledColor: Colors.white,
+                  style: const TextStyle(color: Colors.white),
+                  items: const [
+                    DropdownMenuItem(value: 'all', child: Text('All')),
+                    DropdownMenuItem(value: 'open', child: Text('open')),
+                    DropdownMenuItem(
+                      value: 'assigned',
+                      child: Text('assigned'),
+                    ),
+                    DropdownMenuItem(value: 'closed', child: Text('closed')),
+                  ],
+                  onChanged: (v) => setState(() => _filterStatus = v ?? 'all'),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            // New: only with reports checkbox
+            Row(
+              children: [
+                Checkbox(
+                  value: _filterHasReports,
+                  onChanged: (v) =>
+                      setState(() => _filterHasReports = v ?? false),
+                  activeColor: Colors.white,
+                  checkColor: const Color(0xFF3A4B53),
+                ),
+                const Text('Raport', style: TextStyle(color: Colors.white)),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (filtered.isEmpty)
+          const Center(child: Text('Brak dostępnych zleceń'))
+        else
+          for (var o in filtered)
+            Card(
+              margin: const EdgeInsets.symmetric(vertical: 6),
+              color: panel,
+              child: ListTile(
+                title: Text(
+                  o['title'] ?? '',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                subtitle: Text(
+                  '${o['trade'] ?? ''} — ${o['location'] ?? ''}',
+                  style: const TextStyle(color: Colors.white70),
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      o['status'] ?? '',
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.article_outlined),
+                      tooltip: 'Pokaż raporty',
+                      onPressed: () => _showReports(
+                        o['id'] ?? o['id'].toString(),
+                        o['title'] ?? 'Zlecenie',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
       ],
     );
   }
 
   Widget _buildCurrentListWidget(Color panel) {
     if (_loadingLists) return const Center(child: CircularProgressIndicator());
-    if (_currentOrders.isEmpty) return const Center(child: Text('Brak zadań'));
+    // Apply filters
+    final query = _filterQuery.toLowerCase().trim();
+    final statusFilter = _filterStatus;
+    final hasReportsFilter = _filterHasReports;
+    final filtered = _currentOrders.where((o) {
+      final title = (o['title'] ?? '').toString().toLowerCase();
+      final trade = (o['trade'] ?? '').toString().toLowerCase();
+      final status = (o['status'] ?? '').toString().toLowerCase();
+      final hasReports = (o['hasReports'] == true);
+      final matchesQuery =
+          query.isEmpty || title.contains(query) || trade.contains(query);
+      final matchesStatus = statusFilter == 'all' || status == statusFilter;
+      final matchesReports = !hasReportsFilter || hasReports;
+      return matchesQuery && matchesStatus && matchesReports;
+    }).toList();
+
+    if (filtered.isEmpty) return const Center(child: Text('Brak zadań'));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -506,7 +621,7 @@ class _AdminPanelState extends State<AdminPanel> {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 8),
-        for (var o in _currentOrders)
+        for (var o in filtered)
           Card(
             margin: const EdgeInsets.symmetric(vertical: 6),
             color: panel,

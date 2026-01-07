@@ -1119,7 +1119,7 @@ class TaskCard extends StatelessWidget {
   Widget build(BuildContext context) {
     const cardColor = Color(0xFF2B3740);
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 6),
+      margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: cardColor,
