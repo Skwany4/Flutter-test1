@@ -19,9 +19,8 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
-# =====================================================
 # 20 ZLECEŃ – STATUS OPEN, OPIS >= 3 ZDANIA
-# =====================================================
+
 ORDERS: List[Dict] = [
 
     # ================= MURARZ (7) =================

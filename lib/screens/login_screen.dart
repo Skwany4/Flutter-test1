@@ -108,7 +108,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // NOWE: pokazuje dialog do resetu hasła
+  //pokazuje dialog do resetu hasła
   Future<void> _showResetPasswordDialog() async {
     String email = _emailController.text.trim();
     final formKey = GlobalKey<FormState>();
@@ -203,8 +203,8 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // Usuń możliwość rejestracji w UI — konta będzie tworzył admin (później)
-  // Jeśli masz w services/auth_service.register(), zostaw metodę w serwisie, ale nie udostępniaj jej w UI.
+
+
 
   @override
   Widget build(BuildContext context) {

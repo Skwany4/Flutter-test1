@@ -5,7 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:intl/intl.dart'; // Dodano dla formatowania dat
+import 'package:intl/intl.dart'; 
 import 'dart:async';
 
 class MainPanel extends StatefulWidget {
@@ -282,7 +282,6 @@ class _MainPanelState extends State<MainPanel> {
   }
 
   // Widok: Aktualne zlecenia (kafelki mają: Opis + Raport)
-  // Zmodyfikowane: tylko dwie role w systemie: 'admin' i 'worker'.
   // - admin: widzi wszystkie zlecenia
   // - worker: widzi tylko zlecenia, do których jest przypisany (assignedTo == jego uid)
   Widget _buildCurrentList() {
@@ -1094,7 +1093,7 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 }
 
-/// Prosty widget kafelka zlecenia (rekreacja z oryginalnego projektu)
+/// Prosty widget kafelka zlecenia 
 class TaskCard extends StatelessWidget {
   final String title;
   final String termin;

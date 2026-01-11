@@ -6,22 +6,21 @@ from typing import Dict, List, Optional
 
 import firebase_admin
 from firebase_admin import credentials, auth, firestore
-
+# Ustalanie ścieżki absolutnej (niezależność od CWD)
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 SERVICE_ACCOUNT_PATH = os.path.join(BASE_DIR, "serviceAccountKey.json")
 
 if not os.path.exists(SERVICE_ACCOUNT_PATH):
     print("Brak pliku serviceAccountKey.json w katalogu backend/. Nie commituj klucza do repo.")
     sys.exit(1)
-
+# Singleton: inicjalizacja tylko jeśli aplikacja nie istnieje
 if not firebase_admin._apps:
     cred = credentials.Certificate(SERVICE_ACCOUNT_PATH)
     firebase_admin.initialize_app(cred)
 
 db = firestore.client()
 
-# --- konfiguracja użytkowników do utworzenia ---
-# Hasła są testowe — zmień je przed użyciem w środowisku produkcyjnym.
+# --- DANE SEEDOWE ---
 USERS: List[Dict] = [
     {"email": "admin@example.com", "password": "admin", "displayName": "Administrator", "role": "admin", "trade": ""},
     {"email": "worker_murarz@example.com", "password": "worker", "displayName": "Marek Murarz", "role": "worker", "trade": "murarz"},
@@ -32,7 +31,6 @@ USERS: List[Dict] = [
 ]
 
 # --- przykładowe zlecenia (13) ---
-# Usunięto pole 'price' (niepotrzebne) i dodano pole 'tools' oraz rozbudowano opisy.
 ORDERS: List[Dict] = [
     {
         "title": "Naprawa muru przy wejściu",
@@ -145,11 +143,12 @@ ORDERS: List[Dict] = [
 ]
 
 def create_or_get_user(u: Dict) -> Dict:
-    """
-    Returns a dict with keys: uid, email, displayName, role, trade
-    """
+
+# Tworzy użytkownika w Auth i synchronizuje profil w Firestore.
+
     email = u["email"]
     try:
+        #sprawdza czy istnieje, zamiast rzucać błędem
         fu = auth.get_user_by_email(email)
         uid = fu.uid
         print(f"Użytkownik istnieje: {email} (uid={uid})")
@@ -158,13 +157,12 @@ def create_or_get_user(u: Dict) -> Dict:
         uid = fu.uid
         print(f"Utworzono użytkownika: {email} (uid={uid})")
 
-    # spróbuj ustawić claimy (nie przerywamy w razie błędu)
+# Custom Claims: kluczowe dla Security Rules (request.auth.token.role)
     try:
         auth.set_custom_user_claims(uid, {"role": u.get("role", "worker")})
     except Exception as e:
         print("Nie udało się ustawić claimów:", e)
-
-    # zapisz profil w Firestore
+# Profil w DB: merge=True zapobiega nadpisaniu innych pól (np. awatara, jeśli byłby dodany ręcznie)
     profile = {
         "email": email,
         "displayName": u.get("displayName", ""),
@@ -177,14 +175,14 @@ def create_or_get_user(u: Dict) -> Dict:
 
 
 def safe_add_order(order: Dict) -> Optional[str]:
-    """
-    Add order to Firestore and return the document id (best-effort).
-    """
+
+# Wrapper na db.add(): obsługuje różnice w wersjach SDK Python (zwracanie tuple vs object).
+
     try:
         res = db.collection("orders").add(order)
-        # some SDK versions return (write_result, doc_ref) others return DocumentReference
+# Python SDK v1 zwraca (write_result, doc_ref), v2 zwraca UpdateTime
         try:
-            doc_ref = res[1]
+            doc_ref = res[1] # tuple unpacking
             return doc_ref.id
         except Exception:
             try:
@@ -194,7 +192,7 @@ def safe_add_order(order: Dict) -> Optional[str]:
     except Exception as e:
         print("Błąd przy dodawaniu zlecenia:", e)
         return None
-
+# 1. Tworzenie kont i mapowanie email -> user_object
 
 def seed():
     print("Tworzę użytkowników...")
